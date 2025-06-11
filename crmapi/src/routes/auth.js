@@ -58,7 +58,7 @@ router.post("/login", validateRequest(schemas.login), async (req, res, next) => 
 })
 
 // Register (apenas para admin)
-router.post("/register", authenticateToken, validateRequest(schemas.register), async (req, res, next) => {
+router.post("/register", /*authenticateToken*/ validateRequest(schemas.register), async (req, res, next) => {
   try {
     // Verificar se é admin
     if (req.user.role !== "admin") {
