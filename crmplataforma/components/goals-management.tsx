@@ -1,9 +1,11 @@
+// Em: TESTEFINAL/FRONTTESTE/components/goals-management.tsx
+
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useAuth } from "@/contexts/auth-context";
-import { goalsAPI, usersAPI, type Goal, type User } from "@/lib/api-client";
-import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/auth-context"; //
+import { goalsAPI, usersAPI, type Goal, type User } from "@/lib/api-client"; //
+import { useToast } from "@/hooks/use-toast"; //
 import {
   Card,
   CardContent,
@@ -11,11 +13,11 @@ import {
   CardHeader,
   CardTitle,
   CardFooter,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
-import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+} from "@/components/ui/card"; //
+import { Button } from "@/components/ui/button"; //
+import { Progress } from "@/components/ui/progress"; //
+import { Badge } from "@/components/ui/badge"; //
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"; //
 import { Plus, Target, Calendar, Edit, Trash2, Loader2 } from "lucide-react";
 import {
   Dialog,
@@ -24,17 +26,27 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+} from "@/components/ui/dialog"; //
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"; //
+import { Input } from "@/components/ui/input"; //
+import { Label } from "@/components/ui/label"; //
+import { Textarea } from "@/components/ui/textarea"; //
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@/components/ui/select"; //
 import { format } from "date-fns";
 
 const goalTypeLabels: { [key: string]: string } = {
@@ -52,8 +64,8 @@ const goalPeriodLabels: { [key: string]: string } = {
 };
 
 export function GoalsManagement() {
-  const { user: currentUser } = useAuth();
-  const { toast } = useToast();
+  const { user: currentUser } = useAuth(); //
+  const { toast } = useToast(); //
 
   const [goals, setGoals] = useState<any[]>([]);
   const [users, setUsers] = useState<User[]>([]);
@@ -61,13 +73,19 @@ export function GoalsManagement() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
+  // --- INÍCIO: NOVOS ESTADOS ---
+  const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [goalToDelete, setGoalToDelete] = useState<string | null>(null);
+  // --- FIM: NOVOS ESTADOS ---
+
   const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const goalsPromise = goalsAPI.getAll({});
+      const goalsPromise = goalsAPI.getAll({}); //
       const usersPromise =
         currentUser?.role === "admin" || currentUser?.role === "gerente"
-          ? usersAPI.getAll()
+          ? usersAPI.getAll() //
           : Promise.resolve({ users: [] });
 
       const [goalsResponse, usersResponse] = await Promise.all([
@@ -78,7 +96,7 @@ export function GoalsManagement() {
       const goalsWithProgress = await Promise.all(
         (goalsResponse.goals || []).map(async (goal: Goal) => {
           try {
-            const progressData = await goalsAPI.getProgress(goal.id);
+            const progressData = await goalsAPI.getProgress(goal.id); //
             return { ...goal, ...progressData };
           } catch (e) {
             console.error(`Erro ao buscar progresso para meta ${goal.id}:`, e);
@@ -101,6 +119,7 @@ export function GoalsManagement() {
     loadData();
   }, [loadData]);
 
+  // --- INÍCIO: FUNÇÃO MODIFICADA handleSaveGoal ---
   const handleSaveGoal = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -108,30 +127,38 @@ export function GoalsManagement() {
     const formData = new FormData(e.currentTarget);
     const assignedTo = formData.get("assigned_to") as string;
 
-    // Objeto de dados alinhado com o backend
     const goalData = {
       title: formData.get("title") as string,
       description: formData.get("description") as string,
       type: formData.get("type") as Goal["type"],
-      target: Number(formData.get("target")), // Corrigido de target_value para target
-      period: formData.get("period") as Goal["period"], // Campo obrigatório adicionado
-      start_date: formData.get("start_date") as string, // Campo obrigatório adicionado
+      target: Number(formData.get("target")),
+      period: formData.get("period") as Goal["period"],
+      start_date: formData.get("start_date") as string,
       end_date: formData.get("end_date") as string,
-      assigned_to: assignedTo === "geral" ? null : assignedTo, // Corrigido de user_id para assigned_to
+      assigned_to: assignedTo === "geral" ? null : assignedTo,
+      funnel: (formData.get("funnel") as Goal["funnel"]) || null,
+      source: (formData.get("source") as Goal["source"]) || null,
+      is_active: formData.get("is_active") === "on",
     };
 
     try {
-      await goalsAPI.create(goalData as any);
-      toast({ title: "Meta criada com sucesso!" });
+      if (editingGoal) {
+        await goalsAPI.update(editingGoal.id, goalData as any); //
+        toast({ title: "Meta atualizada com sucesso!" });
+      } else {
+        await goalsAPI.create(goalData as any); //
+        toast({ title: "Meta criada com sucesso!" });
+      }
       setIsDialogOpen(false);
+      setEditingGoal(null);
       loadData();
     } catch (error: any) {
-      console.error("Erro ao criar meta:", error);
+      console.error("Erro ao salvar meta:", error);
       const errorDetails =
         error.response?.data?.details?.join(", ") ||
         "Verifique os campos e tente novamente.";
       toast({
-        title: "Erro ao criar meta",
+        title: "Erro ao salvar meta",
         description: errorDetails,
         variant: "destructive",
       });
@@ -139,8 +166,46 @@ export function GoalsManagement() {
       setIsSubmitting(false);
     }
   };
+  // --- FIM: FUNÇÃO MODIFICADA handleSaveGoal ---
 
-  // O resto do componente...
+  // --- INÍCIO: NOVAS FUNÇÕES ---
+  const handleEditClick = (goal: Goal) => {
+    setEditingGoal(goal);
+    setIsDialogOpen(true);
+  };
+
+  const handleDeleteClick = (goalId: string) => {
+    setGoalToDelete(goalId);
+    setIsConfirmOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!goalToDelete) return;
+
+    try {
+      await goalsAPI.delete(goalToDelete); //
+      toast({
+        title: "Meta Removida",
+        description: "A meta foi removida com sucesso.",
+      });
+      loadData();
+    } catch (error) {
+      toast({
+        title: "Erro ao remover meta",
+        variant: "destructive",
+      });
+    } finally {
+      setIsConfirmOpen(false);
+      setGoalToDelete(null);
+    }
+  };
+
+  const handleOpenDialog = (goal: Goal | null = null) => {
+    setEditingGoal(goal);
+    setIsDialogOpen(true);
+  };
+  // --- FIM: NOVAS FUNÇÕES ---
+
   if (isLoading) {
     return (
       <div className="flex h-full w-full items-center justify-center">
@@ -161,56 +226,89 @@ export function GoalsManagement() {
           </p>
         </div>
         {(currentUser?.role === "admin" || currentUser?.role === "gerente") && (
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          // --- DIALOG TRIGGER ATUALIZADO ---
+          <Dialog
+            open={isDialogOpen}
+            onOpenChange={(open) => {
+              setIsDialogOpen(open);
+              if (!open) setEditingGoal(null);
+            }}
+          >
             <DialogTrigger asChild>
-              <Button>
+              <Button onClick={() => handleOpenDialog()}>
                 <Plus className="mr-2 h-4 w-4" />
                 Adicionar Meta
               </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[500px]">
               <DialogHeader>
-                <DialogTitle>Criar Nova Meta</DialogTitle>
+                <DialogTitle>
+                  {editingGoal ? "Editar Meta" : "Criar Nova Meta"}
+                </DialogTitle>
                 <DialogDescription>
-                  Preencha os detalhes da nova meta para a equipe.
+                  {editingGoal
+                    ? "Atualize os detalhes da meta."
+                    : "Preencha os detalhes da nova meta para a equipe."}
                 </DialogDescription>
               </DialogHeader>
               <form onSubmit={handleSaveGoal} className="space-y-4">
                 <div className="space-y-1">
                   <Label htmlFor="title">Título da Meta</Label>
-                  <Input id="title" name="title" required />
+                  <Input
+                    id="title"
+                    name="title"
+                    defaultValue={editingGoal?.title}
+                    required
+                  />
                 </div>
                 <div className="space-y-1">
                   <Label htmlFor="description">Descrição</Label>
-                  <Textarea id="description" name="description" />
+                  <Textarea
+                    id="description"
+                    name="description"
+                    defaultValue={editingGoal?.description}
+                  />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <Label htmlFor="type">Tipo de Meta</Label>
-                    <Select name="type" required>
+                    <Select
+                      name="type"
+                      defaultValue={editingGoal?.type}
+                      required
+                    >
                       <SelectTrigger>
                         <SelectValue placeholder="Selecione..." />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="leads">Novos Leads</SelectItem>
-                        <SelectItem value="conversions">Conversões</SelectItem>
-                        <SelectItem value="revenue">Receita (R$)</SelectItem>
-                        <SelectItem value="pipeline_time">
-                          Tempo no Pipeline (dias)
-                        </SelectItem>
+                        {Object.entries(goalTypeLabels).map(([key, label]) => (
+                          <SelectItem key={key} value={key}>
+                            {label}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-1">
                     <Label htmlFor="target">Valor Alvo</Label>
-                    <Input id="target" name="target" type="number" required />
+                    <Input
+                      id="target"
+                      name="target"
+                      type="number"
+                      defaultValue={editingGoal?.target}
+                      required
+                    />
                   </div>
                 </div>
 
                 <div className="space-y-1">
                   <Label htmlFor="period">Período da Meta</Label>
-                  <Select name="period" required>
+                  <Select
+                    name="period"
+                    defaultValue={editingGoal?.period}
+                    required
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Selecione..." />
                     </SelectTrigger>
@@ -231,18 +329,39 @@ export function GoalsManagement() {
                       id="start_date"
                       name="start_date"
                       type="date"
+                      defaultValue={
+                        editingGoal
+                          ? format(
+                              new Date(editingGoal.start_date),
+                              "yyyy-MM-dd"
+                            )
+                          : ""
+                      }
                       required
                     />
                   </div>
                   <div className="space-y-1">
                     <Label htmlFor="end_date">Prazo Final</Label>
-                    <Input id="end_date" name="end_date" type="date" required />
+                    <Input
+                      id="end_date"
+                      name="end_date"
+                      type="date"
+                      defaultValue={
+                        editingGoal
+                          ? format(new Date(editingGoal.end_date), "yyyy-MM-dd")
+                          : ""
+                      }
+                      required
+                    />
                   </div>
                 </div>
 
                 <div className="space-y-1">
                   <Label htmlFor="assigned_to">Atribuir para</Label>
-                  <Select name="assigned_to" defaultValue="geral">
+                  <Select
+                    name="assigned_to"
+                    defaultValue={editingGoal?.assigned_to || "geral"}
+                  >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -288,7 +407,7 @@ export function GoalsManagement() {
                 <Badge variant="secondary">
                   {goalPeriodLabels[goal.period] || goal.period}
                 </Badge>
-                {goal.assigned_to ? (
+                {goal.assigned_to_name ? (
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-muted-foreground">
                       {goal.assigned_to_name}
@@ -340,14 +459,21 @@ export function GoalsManagement() {
               </div>
               {(currentUser?.role === "admin" ||
                 currentUser?.role === "gerente") && (
+                // --- BOTÕES COM ONCLICK ADICIONADO ---
                 <div className="flex gap-1">
-                  <Button variant="ghost" size="icon" className="h-7 w-7">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => handleEditClick(goal)}
+                  >
                     <Edit className="h-4 w-4" />
                   </Button>
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-7 w-7 text-red-500"
+                    className="h-7 w-7 text-red-500 hover:text-red-600"
+                    onClick={() => handleDeleteClick(goal.id)}
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -357,6 +483,26 @@ export function GoalsManagement() {
           </Card>
         ))}
       </div>
+
+      {/* --- INÍCIO: NOVO DIÁLOGO DE CONFIRMAÇÃO --- */}
+      <AlertDialog open={isConfirmOpen} onOpenChange={setIsConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Você tem certeza?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação não pode ser desfeita. Isso removerá permanentemente a
+              meta.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete}>
+              Confirmar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      {/* --- FIM: NOVO DIÁLOGO DE CONFIRMAÇÃO --- */}
     </div>
   );
 }
