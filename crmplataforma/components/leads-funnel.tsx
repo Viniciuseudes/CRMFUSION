@@ -637,6 +637,15 @@ export function LeadsFunnel() {
                       <SelectValue placeholder="Selecione..." />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="Enfermagem">Enfermagem</SelectItem>
+                      <SelectItem value="Farmacia">Farmacia</SelectItem>
+                      <SelectItem value="Medicina">Medicina</SelectItem>
+                      <SelectItem value="Biomedicina">Biomedicina</SelectItem>
+                      <SelectItem value="Esteticista">Esteticista</SelectItem>
+                      <SelectItem value="Psicologia">Psicologia</SelectItem>
+                      <SelectItem value="Nutricionista">
+                        Nutricionista
+                      </SelectItem>
                       <SelectItem value="Odontologia">Odontologia</SelectItem>
                       <SelectItem value="Dermatologia">Dermatologia</SelectItem>
                       <SelectItem value="Ortopedia">Ortopedia</SelectItem>
@@ -659,6 +668,8 @@ export function LeadsFunnel() {
                       <SelectItem value="instagram">Instagram</SelectItem>
                       <SelectItem value="google">Google</SelectItem>
                       <SelectItem value="indicacao">Indicação</SelectItem>
+                      <SelectItem value="plataforma">Plataforma</SelectItem>
+                      <SelectItem value="site">Site</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
