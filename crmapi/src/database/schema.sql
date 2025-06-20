@@ -5,7 +5,8 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Enum types
 CREATE TYPE user_role AS ENUM ('admin', 'gerente', 'colaborador');
-CREATE TYPE lead_source AS ENUM ('whatsapp', 'instagram', 'google', 'indicacao');
+-- <--- MUDANÇA AQUI na linha abaixo
+CREATE TYPE lead_source AS ENUM ('whatsapp', 'instagram', 'google', 'indicacao', 'plataforma', 'site');
 CREATE TYPE lead_funnel AS ENUM ('marketing', 'pre-sales', 'sales', 'onboarding', 'ongoing');
 CREATE TYPE client_status AS ENUM ('Ativo', 'Inativo');
 CREATE TYPE activity_type AS ENUM ('call', 'email', 'meeting', 'note', 'conversion', 'stage_change', 'funnel_change');

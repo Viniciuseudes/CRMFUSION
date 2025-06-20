@@ -247,11 +247,13 @@ router.delete("/:id", async (req, res, next) => {
 })
 
 // Converter lead em cliente
-router.post("/:id/convert", async (req, res, next) => {
+router.post("/:id/convert", validateRequest(schemas.convertLead), async (req, res, next) => { // <--- Adicionado validateRequest com o novo schema
   const client = await pool.connect()
   try {
     await client.query("BEGIN")
     const { id } = req.params
+    // Captura os novos dados do corpo da requisição
+    const { saleValue, targetFunnel, targetStage, conversionDate } = req.body; // <--- NOVOS CAMPOS
 
     const leadResult = await client.query("SELECT * FROM leads WHERE id = $1", [id])
     if (leadResult.rows.length === 0) {
@@ -268,14 +270,43 @@ router.post("/:id/convert", async (req, res, next) => {
     const clientResult = await client.query(
       `
       INSERT INTO clients (name, phone, email, last_purchase, doctor, specialty, status, total_spent, assigned_to)
-      VALUES ($1, $2, $3, CURRENT_DATE, $4, $5, $6, $7, $8)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       RETURNING *
     `,
-      [lead.name, lead.phone, lead.email, "A definir", lead.specialty, "Ativo", lead.value, lead.assigned_to]
+      [
+        lead.name,
+        lead.phone,
+        lead.email,
+        conversionDate, // <--- Usa a data da conversão fornecida
+        lead.doctor || null, // Garante que doctor pode ser nulo
+        lead.specialty,
+        "Ativo", // Cliente sempre começa como Ativo
+        saleValue, // <--- Usa o valor da venda fornecido
+        lead.assigned_to
+      ]
     )
     const newClient = clientResult.rows[0]
 
-    await client.query(`INSERT INTO activities (lead_id, client_id, type, description, user_id) VALUES ($1, $2, $3, $4, $5)`, [lead.id, newClient.id, "conversion", `Lead ${lead.name} convertido em cliente`, req.user.id])
+    // Atualiza o funil e estágio do lead para o destino, antes de excluí-lo
+    // Isso é útil para o log de atividades de stage/funnel_change se houver dependência.
+    // Embora o lead vá ser deletado, registrar essa transição pode ser relevante.
+    // Ou podemos simplesmente deletá-lo. Vamos deletá-lo diretamente, mas registrar a atividade.
+    
+    await client.query(`INSERT INTO activities (lead_id, client_id, type, description, user_id) VALUES ($1, $2, $3, $4, $5)`, 
+    [
+      lead.id, 
+      newClient.id, 
+      "conversion", 
+      `Lead ${lead.name} convertido em cliente com venda de R$ ${saleValue.toFixed(2)}`, // <--- Mensagem mais detalhada
+      req.user.id
+    ]);
+
+    // Opcional: Se desejar, registre a mudança de funil/estágio do lead ANTES de deletá-lo, para ter um histórico mais completo,
+    // embora o lead será removido logo em seguida.
+    // await client.query(`INSERT INTO activities (lead_id, type, description, user_id) VALUES ($1, 'funnel_change', 'Lead movido para funil ${targetFunnel} antes da conversão', $2)`, [lead.id, req.user.id]);
+    // await client.query(`INSERT INTO activities (lead_id, type, description, user_id) VALUES ($1, 'stage_change', 'Lead movido para estágio ${targetStage} antes da conversão', $2)`, [lead.id, req.user.id]);
+
+
     await client.query("DELETE FROM leads WHERE id = $1", [id])
     await client.query("COMMIT")
 
