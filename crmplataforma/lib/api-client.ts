@@ -73,7 +73,7 @@ export interface Lead {
   avatar?: string;
   value: number;
   notes?: string;
-  source: "whatsapp" | "instagram" | "google" | "indicacao";
+  source: "whatsapp" | "instagram" | "google" | "indicacao" | "plataforma" | "site"; // <--- MUDANÇA AQUI
   assigned_to?: string; // UUID do usuário
   created_at: string;
   updated_at: string;
@@ -232,39 +232,6 @@ export const usersAPI = {
 };
 
 // Leads
-// ... (imports e códigos de apiClient, interceptors) ...
-
-// --- TIPOS DE DADOS ---
-
-// ... (User, Client, Goal, Activity interfaces - sem mudanças) ...
-
-export interface Lead {
-  id: number;
-  name: string;
-  specialty: string;
-  phone: string;
-  email: string;
-  funnel: string;
-  stage: string;
-  entry_date: string; // MANTÉM COMO OBRIGATÓRIO AQUI, pois é o que VEM do backend
-  tags: string[];
-  avatar?: string;
-  value: number;
-  notes?: string;
-  source: "whatsapp" | "instagram" | "google" | "indicacao";
-  assigned_to?: string; // UUID do usuário
-  created_at: string;
-  updated_at: string;
-  assigned_to_name?: string; // Nome do usuário atribuído (via JOIN no backend)
-}
-
-// ... (Paginated interfaces - sem mudanças) ...
-
-// --- FUNÇÕES DA API ---
-
-// ... (authAPI, usersAPI - sem mudanças) ...
-
-// Leads
 // Omitindo campos que são gerados pelo backend (id, created_at, updated_at, assigned_to, assigned_to_name)
 // E AGORA TAMBÉM OMITINDO 'entry_date' porque ele será gerado automaticamente.
 type CreateLeadData = Omit<Lead, "id" | "created_at" | "updated_at" | "assigned_to" | "assigned_to_name" | "entry_date">; // <<< AQUI ESTÁ A MUDANÇA
@@ -295,13 +262,12 @@ export const leadsAPI = {
     await apiClient.delete(`/leads/${id}`);
   },
 
-  convert: async (id: number): Promise<Client> => {
-    const response = await apiClient.post(`/leads/${id}/convert`);
+  // ***** MUDANÇA AQUI: Adicionado os novos parâmetros para convert *****
+  convert: async (id: number, conversionData: { saleValue: number; targetFunnel: string; targetStage: string; conversionDate: string }): Promise<Client> => {
+    const response = await apiClient.post(`/leads/${id}/convert`, conversionData);
     return response.data;
   },
 };
-
-// ... (clientsAPI, goalsAPI, activitiesAPI, reportsAPI, default export - sem mudanças) ...
 
 // Clients
 type CreateClientData = Omit<Client, "id" | "created_at" | "updated_at" | "assigned_to" | "assigned_to_name">;

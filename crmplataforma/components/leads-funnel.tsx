@@ -18,7 +18,7 @@ import {
   Search,
   X,
   MessageSquare,
-  Clock, // Ícone novo
+  Clock,
   Loader2,
 } from "lucide-react";
 import {
@@ -48,7 +48,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { leadsAPI, type Lead } from "@/lib/api-client";
 import { useAuth } from "@/contexts/auth-context";
-import { TimeAgo } from "@/components/time-ago"; // Importação do novo componente
+import { TimeAgo } from "@/components/time-ago";
 
 const funnels = [
   {
@@ -133,6 +133,14 @@ export function LeadsFunnel() {
   const { toast } = useToast();
   const { user: currentUser } = useAuth();
 
+  // NOVOS ESTADOS PARA A CONVERSÃO
+  const [isConvertDialogOpen, setIsConvertDialogOpen] = useState(false);
+  const [leadToConvert, setLeadToConvert] = useState<Lead | null>(null);
+  const [saleValue, setSaleValue] = useState<number | "">(""); // Valor da venda
+  const [conversionDate, setConversionDate] = useState<string>(
+    new Date().toISOString().split("T")[0]
+  ); // Data da venda
+
   const fetchLeads = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -206,11 +214,8 @@ export function LeadsFunnel() {
   };
 
   const handleSaveLead = async (formData: FormData) => {
-    // Encontrar o primeiro estágio do funil atualmente selecionado
     const currentFunnelData = funnels.find((f) => f.id === selectedFunnel);
 
-    // Se por algum motivo não encontrar o funil (o que não deve acontecer se selectedFunnel for sempre válido),
-    // pode-se definir um fallback ou retornar um erro.
     if (
       !currentFunnelData ||
       !currentFunnelData.stages ||
@@ -233,8 +238,8 @@ export function LeadsFunnel() {
       value: Number(formData.get("value")) || 0,
       notes: formData.get("notes") as string,
       source: formData.get("source") as Lead["source"],
-      funnel: currentFunnelData.id, // <--- MUDANÇA AQUI: Usa o funil selecionado
-      stage: currentFunnelData.stages[0].id, // <--- MUDANÇA AQUI: Usa o primeiro estágio do funil selecionado
+      funnel: currentFunnelData.id,
+      stage: currentFunnelData.stages[0].id,
       tags: ["Novo"],
     };
 
@@ -256,14 +261,57 @@ export function LeadsFunnel() {
     }
   };
 
-  const handleConvertToClient = async (leadId: number) => {
+  // ***** MUDANÇAS AQUI: Lógica de conversão do Lead *****
+  const handleOpenConvertDialog = (lead: Lead) => {
+    setLeadToConvert(lead);
+    setSaleValue(lead.value > 0 ? lead.value : ""); // Preenche com o valor de oportunidade se existir
+    setConversionDate(new Date().toISOString().split("T")[0]); // Data atual
+    setIsConvertDialogOpen(true);
+  };
+
+  const handleConfirmConversion = async (
+    e: React.FormEvent<HTMLFormElement>
+  ) => {
+    e.preventDefault();
+    if (!leadToConvert || saleValue === "") {
+      toast({
+        title: "Erro na conversão",
+        description: "Valor da venda é obrigatório.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsLoading(true); // Pode usar um estado de loading local para o modal se preferir
     try {
-      await leadsAPI.convert(leadId);
+      const ongoingFunnel = funnels.find((f) => f.id === "ongoing");
+      if (!ongoingFunnel || ongoingFunnel.stages.length === 0) {
+        toast({
+          title: "Erro de Configuração",
+          description:
+            "Funil 'Ongoing' ou seus estágios não configurados. Não foi possível converter.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Enviando o valor da venda e o funil/estágio de destino
+      await leadsAPI.convert(leadToConvert.id, {
+        saleValue: Number(saleValue),
+        targetFunnel: "ongoing",
+        targetStage: ongoingFunnel.stages[0].id,
+        conversionDate: conversionDate, // Envia a data da conversão
+      });
+
       toast({
         title: "Lead convertido",
-        description: `Lead convertido em cliente com sucesso!`,
+        description: `${leadToConvert.name} foi convertido em cliente no funil 'Ongoing'.`,
       });
-      fetchLeads();
+      fetchLeads(); // Recarrega os leads para refletir a remoção do lead e possível adição do cliente (se o backend retornar cliente)
+      setIsConvertDialogOpen(false);
+      setLeadToConvert(null);
+      setSaleValue("");
+      setConversionDate(new Date().toISOString().split("T")[0]); // Reseta
     } catch (error) {
       console.error("Erro ao converter lead:", error);
       toast({
@@ -271,8 +319,11 @@ export function LeadsFunnel() {
         description: "Não foi possível converter o lead em cliente.",
         variant: "destructive",
       });
+    } finally {
+      setIsLoading(false);
     }
   };
+  // ***** FIM DAS MUDANÇAS NA Lógica de conversão do Lead *****
 
   const updateLeadOnAPI = async (leadId: number, updates: Partial<Lead>) => {
     try {
@@ -414,6 +465,8 @@ export function LeadsFunnel() {
       instagram: "Instagram",
       google: "Google",
       indicacao: "Indicação",
+      plataforma: "Plataforma",
+      site: "Site",
     };
     return labels[source] || source;
   };
@@ -424,6 +477,8 @@ export function LeadsFunnel() {
       instagram: "bg-pink-100 text-pink-800",
       google: "bg-blue-100 text-blue-800",
       indicacao: "bg-yellow-100 text-yellow-800",
+      plataforma: "bg-gray-100 text-gray-800",
+      site: "bg-indigo-100 text-indigo-800",
     };
     return colors[source] || "bg-gray-100 text-gray-800";
   };
@@ -826,6 +881,65 @@ export function LeadsFunnel() {
         </DialogContent>
       </Dialog>
 
+      {/* ***** NOVO DIÁLOGO DE CONVERSÃO DE LEAD ***** */}
+      <Dialog open={isConvertDialogOpen} onOpenChange={setIsConvertDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Converter Lead em Cliente</DialogTitle>
+            <DialogDescription>
+              Confirme o valor da venda e a data para converter{" "}
+              <span className="font-semibold">{leadToConvert?.name}</span> em
+              cliente.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleConfirmConversion} className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="saleValue">Valor da Venda (R$)</Label>
+              <Input
+                id="saleValue"
+                name="saleValue"
+                type="number"
+                step="0.01"
+                placeholder="Ex: 1500.00"
+                value={saleValue}
+                onChange={(e) =>
+                  setSaleValue(
+                    e.target.value === "" ? "" : Number(e.target.value)
+                  )
+                }
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="conversionDate">Data da Venda</Label>
+              <Input
+                id="conversionDate"
+                name="conversionDate"
+                type="date"
+                value={conversionDate}
+                onChange={(e) => setConversionDate(e.target.value)}
+                required
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsConvertDialogOpen(false)}
+                disabled={isLoading}
+              >
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={isLoading}>
+                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Confirmar Conversão
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+      {/* ***** FIM DO NOVO DIÁLOGO DE CONVERSÃO DE LEAD ***** */}
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {currentFunnelData.stages.map((stage, stageIndex) => {
           const stageLeads = getLeadsByFunnelAndStage(
@@ -917,7 +1031,6 @@ export function LeadsFunnel() {
                               {lead.email}
                             </div>
 
-                            {/********** INÍCIO DA MUDANÇA CORRIGIDA **********/}
                             <div className="flex items-center justify-between pt-1">
                               <div className="flex items-center gap-1">
                                 <Calendar className="h-3 w-3 text-sky-600" />
@@ -1005,7 +1118,7 @@ export function LeadsFunnel() {
                                   size="sm"
                                   variant="default"
                                   className="h-6 text-xs px-2 bg-green-500 hover:bg-green-600 text-white"
-                                  onClick={() => handleConvertToClient(lead.id)}
+                                  onClick={() => handleOpenConvertDialog(lead)} // <--- MUDANÇA AQUI: Abrir diálogo de conversão
                                 >
                                   <UserCheck className="h-3 w-3 mr-1" />
                                   Converter
