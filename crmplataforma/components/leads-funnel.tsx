@@ -206,6 +206,25 @@ export function LeadsFunnel() {
   };
 
   const handleSaveLead = async (formData: FormData) => {
+    // Encontrar o primeiro estágio do funil atualmente selecionado
+    const currentFunnelData = funnels.find((f) => f.id === selectedFunnel);
+
+    // Se por algum motivo não encontrar o funil (o que não deve acontecer se selectedFunnel for sempre válido),
+    // pode-se definir um fallback ou retornar um erro.
+    if (
+      !currentFunnelData ||
+      !currentFunnelData.stages ||
+      currentFunnelData.stages.length === 0
+    ) {
+      toast({
+        title: "Erro de Configuração",
+        description:
+          "Não foi possível determinar o funil ou estágio inicial. Verifique a configuração dos funis.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const leadDataToSave = {
       name: formData.get("name") as string,
       specialty: formData.get("specialty") as string,
@@ -214,8 +233,8 @@ export function LeadsFunnel() {
       value: Number(formData.get("value")) || 0,
       notes: formData.get("notes") as string,
       source: formData.get("source") as Lead["source"],
-      funnel: "marketing",
-      stage: "lead-capture",
+      funnel: currentFunnelData.id, // <--- MUDANÇA AQUI: Usa o funil selecionado
+      stage: currentFunnelData.stages[0].id, // <--- MUDANÇA AQUI: Usa o primeiro estágio do funil selecionado
       tags: ["Novo"],
     };
 
@@ -223,7 +242,7 @@ export function LeadsFunnel() {
       await leadsAPI.create(leadDataToSave);
       toast({
         title: "Lead criado",
-        description: `${leadDataToSave.name} foi adicionado ao pipeline.`,
+        description: `${leadDataToSave.name} foi adicionado ao funil ${currentFunnelData.title} no estágio ${currentFunnelData.stages[0].title}.`,
       });
       fetchLeads();
       setIsDialogOpen(false);
