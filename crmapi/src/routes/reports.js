@@ -83,7 +83,7 @@ router.get("/stats", async (req, res, next) => {
         WHERE last_purchase < $1 ${req.user.role !== "admin" ? "AND assigned_to = $2" : ""}
       `,
           req.user.role !== "admin"
-            ? [subDays(new Date(), 60), req.user.id] // Use subDays para 60 dias atrás
+            ? [subDays(new Date(), 60), req.user.id]
             : [subDays(new Date(), 60)],
         ),
       ])
@@ -212,7 +212,6 @@ router.get("/conversions-by-month", async (req, res, next) => {
       FROM activities a
     `
 
-    // Correção: a startDate deve ser aplicada na query principal, não no WHERE a.date >= $1 que usa um paramCount dinâmico
     const startDate = subMonths(new Date(), monthsBack);
     let params = [];
     let paramCount = 0;
@@ -354,7 +353,7 @@ router.get("/leads-timeline", async (req, res, next) => {
 // Análise de clientes por especialidade
 router.get("/client-specialty-analysis", async (req, res, next) => {
   try {
-    const { period = "all" } = req.query; // 'all' ou número de dias (e.g., '365')
+    const { period = "all" } = req.query;
     let dateFilter = '';
     const params = [];
     let paramCount = 0;
@@ -363,7 +362,7 @@ router.get("/client-specialty-analysis", async (req, res, next) => {
 
     if (period !== "all") {
       paramCount++;
-      dateFilter = ` AND c.created_at >= $${paramCount}`; // Usando created_at
+      dateFilter = ` AND c.created_at >= $${paramCount}`;
       params.push(startDate);
     }
 
@@ -379,8 +378,8 @@ router.get("/client-specialty-analysis", async (req, res, next) => {
       SELECT 
         specialty,
         COUNT(id) as total_clients,
-        COALESCE(SUM(total_spent), 0) as total_revenue, -- COALESCE para garantir 0 em vez de null
-        COALESCE(AVG(total_spent), 0) as avg_revenue_per_client -- COALESCE para garantir 0 em vez de null
+        COALESCE(SUM(total_spent), 0) as total_revenue,
+        COALESCE(AVG(total_spent), 0) as avg_revenue_per_client
       FROM clients c
       WHERE 1=1 ${dateFilter}
       GROUP BY specialty
@@ -405,7 +404,7 @@ router.get("/client-specialty-analysis", async (req, res, next) => {
 // Análise de Lifetime Value (LTV)
 router.get("/ltv-analysis", async (req, res, next) => {
   try {
-    const { period = "all" } = req.query; // 'all' ou número de dias
+    const { period = "all" } = req.query;
     let dateFilter = '';
     const params = [];
     let paramCount = 0;
@@ -414,7 +413,7 @@ router.get("/ltv-analysis", async (req, res, next) => {
 
     if (period !== "all") {
       paramCount++;
-      dateFilter = ` AND c.entry_date >= $${paramCount}`; // <--- MUDANÇA AQUI: Filtrar por entry_date
+      dateFilter = ` AND c.entry_date >= $${paramCount}`;
       params.push(startDate);
     }
 
@@ -450,7 +449,7 @@ router.get("/ltv-analysis", async (req, res, next) => {
       totalClients,
       totalLifetimeRevenue: totalLifetimeRevenue,
       averageLTV: ltv,
-      avgClientLifespanDays: Math.round(avgClientLifespanDays), // <--- CORRIGIDO: usar avgClientLifespanDays aqui
+      avgClientLifespanDays: Math.round(avgClientLifespanDays),
     });
 
   } catch (error) {
@@ -462,16 +461,16 @@ router.get("/ltv-analysis", async (req, res, next) => {
 // Análise de Monthly Recurring Revenue (MRR)
 router.get("/mrr-analysis", async (req, res, next) => {
   try {
-    const { months = "6" } = req.query; // Número de meses para calcular o MRR
+    const { months = "6" } = req.query;
     const monthsBack = Number.parseInt(months);
     const startDate = subMonths(new Date(), monthsBack);
 
     let query = `
       SELECT 
-        DATE_TRUNC('month', c.first_purchase_date) as month, -- <--- MUDANÇA AQUI: Usar first_purchase_date para MRR
-        COALESCE(SUM(c.total_spent), 0) as monthly_revenue_sum -- COALESCE
+        DATE_TRUNC('month', c.first_purchase_date) as month,
+        COALESCE(SUM(c.total_spent), 0) as monthly_revenue_sum
       FROM clients c
-      WHERE c.first_purchase_date >= $1 -- <--- MUDANÇA AQUI: Filtrar por first_purchase_date
+      WHERE c.first_purchase_date >= $1
     `;
     const params = [startDate];
     let paramCount = 1;
@@ -482,16 +481,15 @@ router.get("/mrr-analysis", async (req, res, next) => {
       params.push(req.user.id);
     }
 
-    query += ` GROUP BY DATE_TRUNC('month', c.first_purchase_date) ORDER BY month DESC`; // <--- MUDANÇA AQUI
+    query += ` GROUP BY DATE_TRUNC('month', c.first_purchase_date) ORDER BY month DESC`;
 
     const result = await pool.query(query, params);
 
-    const monthlyDataArray = []; // Para garantir a ordem cronológica no frontend
+    const monthlyDataArray = [];
     let totalRevenueSum = 0;
     
-    // Pegar a data atual do relatório e ir subtraindo meses para preencher lacunas
     let currentMonth = new Date();
-    currentMonth.setDate(1); // Garante que é o primeiro dia do mês
+    currentMonth.setDate(1);
     for (let i = 0; i < monthsBack; i++) {
         const monthKey = format(currentMonth, "yyyy-MM");
         let revenueForMonth = 0;
@@ -506,13 +504,12 @@ router.get("/mrr-analysis", async (req, res, next) => {
         currentMonth = subMonths(currentMonth, 1);
     }
 
-    // Reverter a ordem para que o gráfico seja crescente (do mais antigo para o mais recente)
     monthlyDataArray.reverse();
 
-    const mrr = monthsBack > 0 ? (totalRevenueSum / monthsBack) : 0; // MRR sobre o número de meses do período
+    const mrr = monthsBack > 0 ? (totalRevenueSum / monthsBack) : 0;
 
     res.json({
-      monthlyRevenue: monthlyDataArray, // Retorna array para gráfico
+      monthlyRevenue: monthlyDataArray,
       averageMRR: mrr,
       calculatedOverMonths: monthsBack,
     });
