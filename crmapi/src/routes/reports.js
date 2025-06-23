@@ -1,3 +1,4 @@
+// crmapi/src/routes/reports.js
 const express = require("express")
 const pool = require("../config/database")
 const { startOfMonth, endOfMonth, subMonths, format, subDays, subWeeks } = require("date-fns")
@@ -461,56 +462,53 @@ router.get("/ltv-analysis", async (req, res, next) => {
 // Análise de Monthly Recurring Revenue (MRR)
 router.get("/mrr-analysis", async (req, res, next) => {
   try {
-    const { months = "6" } = req.query;
+    const { months = "12" } = req.query;
     const monthsBack = Number.parseInt(months);
     const startDate = subMonths(new Date(), monthsBack);
 
     let query = `
       SELECT 
-        DATE_TRUNC('month', c.first_purchase_date) as month,
-        COALESCE(SUM(c.total_spent), 0) as monthly_revenue_sum
+        to_char(date_trunc('month', c.first_purchase_date), 'YYYY-MM') as month,
+        SUM(c.total_spent) as monthly_revenue
       FROM clients c
-      WHERE c.first_purchase_date >= $1
+      WHERE c.first_purchase_date IS NOT NULL
     `;
-    const params = [startDate];
-    let paramCount = 1;
+    const params = [];
+    let paramCount = 0;
 
-    if (req.user.role !== "admin") {
+    if (req.user.role !== 'admin') {
       paramCount++;
       query += ` AND c.assigned_to = $${paramCount}`;
       params.push(req.user.id);
     }
 
-    query += ` GROUP BY DATE_TRUNC('month', c.first_purchase_date) ORDER BY month DESC`;
+    query += `
+      GROUP BY month
+      ORDER BY month ASC
+    `;
 
     const result = await pool.query(query, params);
+    
+    const monthlyRevenueMap = new Map();
+    result.rows.forEach(row => {
+        monthlyRevenueMap.set(row.month, parseFloat(row.monthly_revenue));
+    });
 
     const monthlyDataArray = [];
     let totalRevenueSum = 0;
-    
-    let currentMonth = new Date();
-    currentMonth.setDate(1);
-    for (let i = 0; i < monthsBack; i++) {
-        const monthKey = format(currentMonth, "yyyy-MM");
-        let revenueForMonth = 0;
-        
-        const foundRow = result.rows.find(row => format(new Date(row.month), "yyyy-MM") === monthKey);
-        if (foundRow) {
-            revenueForMonth = Number.parseFloat(foundRow.monthly_revenue_sum);
-        }
+    for (let i = monthsBack -1; i >= 0; i--) {
+        const monthDate = subMonths(new Date(), i);
+        const monthKey = format(monthDate, "yyyy-MM");
+        const revenueForMonth = monthlyRevenueMap.get(monthKey) || 0;
         monthlyDataArray.push({ month: monthKey, revenue: revenueForMonth });
         totalRevenueSum += revenueForMonth;
-
-        currentMonth = subMonths(currentMonth, 1);
     }
 
-    monthlyDataArray.reverse();
-
-    const mrr = monthsBack > 0 ? (totalRevenueSum / monthsBack) : 0;
-
+    const averageMRR = monthsBack > 0 ? totalRevenueSum / monthsBack : 0;
+    
     res.json({
       monthlyRevenue: monthlyDataArray,
-      averageMRR: mrr,
+      averageMRR: averageMRR,
       calculatedOverMonths: monthsBack,
     });
 
