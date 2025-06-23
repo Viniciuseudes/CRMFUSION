@@ -1,6 +1,6 @@
 const express = require("express")
 const pool = require("../config/database")
-const { startOfMonth, endOfMonth, subMonths, format, subDays, subWeeks } = require("date-fns") // Importar subDays e subWeeks
+const { startOfMonth, endOfMonth, subMonths, format, subDays, subWeeks } = require("date-fns")
 
 const router = express.Router()
 
@@ -9,22 +9,21 @@ function getStartDate(periodValue) {
   let startDate = new Date(); // Inicia com a data atual
   
   if (periodValue === "all") {
-    return new Date(0); // Epoch, representa "desde o início dos tempos" para fins práticos
+    // Para 'all', retorna uma data muito antiga para incluir tudo
+    return new Date(0); // Epoch, 1970-01-01T00:00:00.000Z
   }
 
   const numericPeriod = Number.parseInt(periodValue);
 
   if (Number.isNaN(numericPeriod)) {
-    // Tratar casos como 'month', 'week', 'day' se forem usados como string literals
-    // Seu frontend envia "30", "90", "180", "365", então periodValue será um número.
-    // Mas se ele virar uma string como 'month' em algum outro lugar, isso será útil.
+    // Fallback caso periodValue não seja um número (embora o frontend deva enviar números)
     switch(periodValue) {
       case 'month':
-        return startOfMonth(subMonths(new Date(), 1)); // Mês passado
+        return startOfMonth(subMonths(new Date(), 1));
       case 'week':
-        return subWeeks(new Date(), 1); // Semana passada
+        return subWeeks(new Date(), 1);
       case 'day':
-        return subDays(new Date(), 1); // Ontem
+        return subDays(new Date(), 1);
       default:
         return new Date(0); // Fallback seguro
     }
@@ -38,14 +37,11 @@ function getStartDate(periodValue) {
 // Estatísticas gerais
 router.get("/stats", async (req, res, next) => {
   try {
-    const { period = "30" } = req.query; // period pode ser '30', '90', '180', '365', 'all'
-    const startDate = getStartDate(period); // <--- MUDANÇA AQUI
+    const { period = "30" } = req.query;
+    const startDate = getStartDate(period);
 
-    // ... (restante do código da rota /stats) ...
-    // Seu código atual da rota /stats está abaixo, apenas garantindo que o startDate seja usado corretamente
     const [totalLeads, totalClients, totalPipelineValue, totalRevenue, avgPipelineTime, clientsNeedingReactivation] =
       await Promise.all([
-        // Total de leads
         pool.query(
           `
         SELECT COUNT(*) as count FROM leads 
@@ -53,8 +49,6 @@ router.get("/stats", async (req, res, next) => {
       `,
           req.user.role !== "admin" ? [startDate, req.user.id] : [startDate],
         ),
-
-        // Total de clientes
         pool.query(
           `
         SELECT COUNT(*) as count FROM clients 
@@ -62,8 +56,6 @@ router.get("/stats", async (req, res, next) => {
       `,
           req.user.role !== "admin" ? [startDate, req.user.id] : [startDate],
         ),
-
-        // Valor total do pipeline
         pool.query(
           `
         SELECT COALESCE(SUM(value), 0) as total FROM leads 
@@ -71,8 +63,6 @@ router.get("/stats", async (req, res, next) => {
       `,
           req.user.role !== "admin" ? [startDate, req.user.id] : [startDate],
         ),
-
-        // Receita total
         pool.query(
           `
         SELECT COALESCE(SUM(total_spent), 0) as total FROM clients 
@@ -80,8 +70,6 @@ router.get("/stats", async (req, res, next) => {
       `,
           req.user.role !== "admin" ? [startDate, req.user.id] : [startDate],
         ),
-
-        // Tempo médio no pipeline
         pool.query(
           `
         SELECT AVG(EXTRACT(DAY FROM (updated_at - created_at))) as avg_days FROM leads 
@@ -89,20 +77,17 @@ router.get("/stats", async (req, res, next) => {
       `,
           req.user.role !== "admin" ? [startDate, req.user.id] : [startDate],
         ),
-
-        // Clientes precisando reativação
         pool.query(
           `
         SELECT COUNT(*) as count FROM clients 
         WHERE last_purchase < $1 ${req.user.role !== "admin" ? "AND assigned_to = $2" : ""}
       `,
           req.user.role !== "admin"
-            ? [new Date(Date.now() - 60 * 24 * 60 * 60 * 1000), req.user.id]
-            : [new Date(Date.now() - 60 * 24 * 60 * 60 * 1000)],
+            ? [subDays(new Date(), 60), req.user.id] // Use subDays para 60 dias atrás
+            : [subDays(new Date(), 60)],
         ),
       ])
 
-    // Calcular taxa de conversão
     const totalLeadsCount = Number.parseInt(totalLeads.rows[0].count)
     const totalClientsCount = Number.parseInt(totalClients.rows[0].count)
     const conversionRate = totalLeadsCount > 0 ? (totalClientsCount / (totalLeadsCount + totalClientsCount)) * 100 : 0
@@ -125,9 +110,8 @@ router.get("/stats", async (req, res, next) => {
 router.get("/funnel-stats", async (req, res, next) => {
   try {
     const { period = "30" } = req.query
-    const startDate = getStartDate(period); // <--- MUDANÇA AQUI
+    const startDate = getStartDate(period);
 
-    // ... (restante do código da rota /funnel-stats) ...
     let query = `
       SELECT 
         funnel,
@@ -149,7 +133,6 @@ router.get("/funnel-stats", async (req, res, next) => {
 
     const result = await pool.query(query, params)
 
-    // Organizar dados por funil
     const funnelStats = {}
     result.rows.forEach((row) => {
       if (!funnelStats[row.funnel]) {
@@ -179,9 +162,8 @@ router.get("/funnel-stats", async (req, res, next) => {
 router.get("/source-stats", async (req, res, next) => {
   try {
     const { period = "30" } = req.query
-    const startDate = getStartDate(period); // <--- MUDANÇA AQUI
+    const startDate = getStartDate(period);
 
-    // ... (restante do código da rota /source-stats) ...
     let query = `
       SELECT 
         source,
@@ -202,7 +184,6 @@ router.get("/source-stats", async (req, res, next) => {
 
     const result = await pool.query(query, params)
 
-    // Organizar dados por origem
     const sourceStats = {}
     result.rows.forEach((row) => {
       sourceStats[row.source] = {
@@ -231,20 +212,24 @@ router.get("/conversions-by-month", async (req, res, next) => {
       FROM activities a
     `
 
+    // Correção: a startDate deve ser aplicada na query principal, não no WHERE a.date >= $1 que usa um paramCount dinâmico
+    const startDate = subMonths(new Date(), monthsBack);
+    let params = [];
+    let paramCount = 0;
+
     if (req.user.role !== "admin") {
-      query += ` WHERE a.user_id = $1 AND`
+      query += ` WHERE a.user_id = $${++paramCount} AND a.date >= $${++paramCount}`;
+      params.push(req.user.id, startDate);
     } else {
-      query += ` WHERE`
+      query += ` WHERE a.date >= $${++paramCount}`;
+      params.push(startDate);
     }
 
-    const startDate = subMonths(new Date(), monthsBack); // <--- MUDANÇA AQUI: Usa subMonths diretamente
-    query += ` a.type = 'conversion' AND a.date >= $${req.user.role !== "admin" ? "2" : "1"}
+    query += ` AND a.type = 'conversion'
       GROUP BY DATE_TRUNC('month', a.date)
       ORDER BY month DESC
-    `
-
-    const params = req.user.role !== "admin" ? [req.user.id, startDate] : [startDate]
-
+    `;
+    
     const result = await pool.query(query, params)
 
     const conversionsByMonth = {}
@@ -267,7 +252,7 @@ router.get("/user-performance", async (req, res, next) => {
     }
 
     const { period = "30" } = req.query
-    const startDate = getStartDate(period); // <--- MUDANÇA AQUI
+    const startDate = getStartDate(period);
 
     const result = await pool.query(
       `
@@ -312,24 +297,24 @@ router.get("/leads-timeline", async (req, res, next) => {
     const { period = "week", limit = "10" } = req.query
 
     let dateFormat
-    let startDate = new Date(); // Inicia com a data atual
+    let startDate = new Date();
 
     switch (period) {
       case "day":
         dateFormat = "YYYY-MM-DD"
-        startDate = subDays(startDate, Number.parseInt(limit)); // <--- MUDANÇA AQUI
+        startDate = subDays(startDate, Number.parseInt(limit));
         break
       case "week":
         dateFormat = 'YYYY-"W"WW'
-        startDate = subWeeks(startDate, Number.parseInt(limit)); // <--- MUDANÇA AQUI
+        startDate = subWeeks(startDate, Number.parseInt(limit));
         break
       case "month":
         dateFormat = "YYYY-MM"
-        startDate = subMonths(startDate, Number.parseInt(limit)); // <--- MUDANÇA AQUI
+        startDate = subMonths(startDate, Number.parseInt(limit));
         break
       default:
         dateFormat = "YYYY-MM-DD"
-        startDate = subDays(startDate, Number.parseInt(limit)); // <--- MUDANÇA AQUI
+        startDate = subDays(startDate, Number.parseInt(limit));
     }
 
     let query = `
@@ -374,11 +359,11 @@ router.get("/client-specialty-analysis", async (req, res, next) => {
     const params = [];
     let paramCount = 0;
 
-    const startDate = getStartDate(period); // <--- MUDANÇA AQUI: Usa a nova função
+    const startDate = getStartDate(period);
 
     if (period !== "all") {
       paramCount++;
-      dateFilter = ` AND c.created_at >= $${paramCount}`;
+      dateFilter = ` AND c.created_at >= $${paramCount}`; // Usando created_at
       params.push(startDate);
     }
 
@@ -394,8 +379,8 @@ router.get("/client-specialty-analysis", async (req, res, next) => {
       SELECT 
         specialty,
         COUNT(id) as total_clients,
-        SUM(total_spent) as total_revenue,
-        AVG(total_spent) as avg_revenue_per_client
+        COALESCE(SUM(total_spent), 0) as total_revenue, -- COALESCE para garantir 0 em vez de null
+        COALESCE(AVG(total_spent), 0) as avg_revenue_per_client -- COALESCE para garantir 0 em vez de null
       FROM clients c
       WHERE 1=1 ${dateFilter}
       GROUP BY specialty
@@ -407,8 +392,8 @@ router.get("/client-specialty-analysis", async (req, res, next) => {
     res.json(result.rows.map(row => ({
       specialty: row.specialty,
       totalClients: Number.parseInt(row.total_clients),
-      totalRevenue: Number.parseFloat(row.total_revenue) || 0,
-      avgRevenuePerClient: Number.parseFloat(row.avg_revenue_per_client) || 0,
+      totalRevenue: Number.parseFloat(row.total_revenue),
+      avgRevenuePerClient: Number.parseFloat(row.avg_revenue_per_client),
     })));
 
   } catch (error) {
@@ -425,11 +410,11 @@ router.get("/ltv-analysis", async (req, res, next) => {
     const params = [];
     let paramCount = 0;
 
-    const startDate = getStartDate(period); // <--- MUDANÇA AQUI: Usa a nova função
+    const startDate = getStartDate(period);
 
     if (period !== "all") {
       paramCount++;
-      dateFilter = ` AND c.created_at >= $${paramCount}`;
+      dateFilter = ` AND c.entry_date >= $${paramCount}`; // <--- MUDANÇA AQUI: Filtrar por entry_date
       params.push(startDate);
     }
 
@@ -439,7 +424,6 @@ router.get("/ltv-analysis", async (req, res, next) => {
       params.push(req.user.id);
     }
 
-    // LTV simplificado: Soma do total_spent dividido pelo número de clientes únicos
     const result = await pool.query(
       `
       SELECT 
@@ -455,11 +439,10 @@ router.get("/ltv-analysis", async (req, res, next) => {
     const data = result.rows[0];
     const totalClients = Number.parseInt(data.total_clients) || 0;
     const totalLifetimeRevenue = Number.parseFloat(data.total_lifetime_revenue) || 0;
-    const avgClientDays = Number.parseFloat(data.avg_client_days) || 0;
+    const avgClientLifespanDays = Number.parseFloat(data.avg_client_days) || 0;
 
     let ltv = 0;
-    if (totalClients > 0) { // Correção: LTV não depende de avgClientDays > 0
-      // LTV = Receita Total de Todos os Clientes / Total de Clientes
+    if (totalClients > 0) {
       ltv = totalLifetimeRevenue / totalClients;
     }
 
@@ -467,7 +450,7 @@ router.get("/ltv-analysis", async (req, res, next) => {
       totalClients,
       totalLifetimeRevenue: totalLifetimeRevenue,
       averageLTV: ltv,
-      avgClientLifespanDays: Math.round(avgClientDays),
+      avgClientLifespanDays: Math.round(avgClientLifespanDays), // <--- CORRIGIDO: usar avgClientLifespanDays aqui
     });
 
   } catch (error) {
@@ -481,15 +464,14 @@ router.get("/mrr-analysis", async (req, res, next) => {
   try {
     const { months = "6" } = req.query; // Número de meses para calcular o MRR
     const monthsBack = Number.parseInt(months);
-    const startDate = subMonths(new Date(), monthsBack); // <--- MUDANÇA AQUI: Usa subMonths diretamente
+    const startDate = subMonths(new Date(), monthsBack);
 
-    // MRR simplificado: Soma das compras nos últimos N meses / N meses
     let query = `
       SELECT 
-        DATE_TRUNC('month', c.last_purchase) as month,
-        SUM(c.total_spent) as monthly_revenue
+        DATE_TRUNC('month', c.first_purchase_date) as month, -- <--- MUDANÇA AQUI: Usar first_purchase_date para MRR
+        COALESCE(SUM(c.total_spent), 0) as monthly_revenue_sum -- COALESCE
       FROM clients c
-      WHERE c.last_purchase >= $1
+      WHERE c.first_purchase_date >= $1 -- <--- MUDANÇA AQUI: Filtrar por first_purchase_date
     `;
     const params = [startDate];
     let paramCount = 1;
@@ -500,28 +482,39 @@ router.get("/mrr-analysis", async (req, res, next) => {
       params.push(req.user.id);
     }
 
-    query += ` GROUP BY DATE_TRUNC('month', c.last_purchase) ORDER BY month DESC`;
+    query += ` GROUP BY DATE_TRUNC('month', c.first_purchase_date) ORDER BY month DESC`; // <--- MUDANÇA AQUI
 
     const result = await pool.query(query, params);
 
-    const monthlyData = {};
+    const monthlyDataArray = []; // Para garantir a ordem cronológica no frontend
     let totalRevenueSum = 0;
-    let monthsWithRevenue = 0;
+    
+    // Pegar a data atual do relatório e ir subtraindo meses para preencher lacunas
+    let currentMonth = new Date();
+    currentMonth.setDate(1); // Garante que é o primeiro dia do mês
+    for (let i = 0; i < monthsBack; i++) {
+        const monthKey = format(currentMonth, "yyyy-MM");
+        let revenueForMonth = 0;
+        
+        const foundRow = result.rows.find(row => format(new Date(row.month), "yyyy-MM") === monthKey);
+        if (foundRow) {
+            revenueForMonth = Number.parseFloat(foundRow.monthly_revenue_sum);
+        }
+        monthlyDataArray.push({ month: monthKey, revenue: revenueForMonth });
+        totalRevenueSum += revenueForMonth;
 
-    result.rows.forEach(row => {
-      const monthKey = format(new Date(row.month), "yyyy-MM");
-      const revenue = Number.parseFloat(row.monthly_revenue) || 0;
-      monthlyData[monthKey] = revenue;
-      totalRevenueSum += revenue;
-      monthsWithRevenue++;
-    });
+        currentMonth = subMonths(currentMonth, 1);
+    }
 
-    const mrr = monthsWithRevenue > 0 ? (totalRevenueSum / monthsWithRevenue) : 0;
+    // Reverter a ordem para que o gráfico seja crescente (do mais antigo para o mais recente)
+    monthlyDataArray.reverse();
+
+    const mrr = monthsBack > 0 ? (totalRevenueSum / monthsBack) : 0; // MRR sobre o número de meses do período
 
     res.json({
-      monthlyRevenue: monthlyData,
+      monthlyRevenue: monthlyDataArray, // Retorna array para gráfico
       averageMRR: mrr,
-      calculatedOverMonths: monthsWithRevenue,
+      calculatedOverMonths: monthsBack,
     });
 
   } catch (error) {
