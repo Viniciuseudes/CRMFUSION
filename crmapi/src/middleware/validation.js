@@ -59,7 +59,7 @@ const schemas = {
     tags: Joi.array().items(Joi.string()).default([]),
     value: Joi.number().min(0).default(0),
     notes: Joi.string().allow(""),
-    source: Joi.string().valid("whatsapp", "instagram", "google", "indicacao", "plataforma", "site").required(), // <--- ADIÇÃO AQUI
+    source: Joi.string().valid("whatsapp", "instagram", "google", "indicacao", "plataforma", "site").required(),
   }),
 
   updateLead: Joi.object({
@@ -72,7 +72,7 @@ const schemas = {
     tags: Joi.array().items(Joi.string()),
     value: Joi.number().min(0),
     notes: Joi.string().allow(""),
-    source: Joi.string().valid("whatsapp", "instagram", "google", "indicacao", "plataforma", "site"), // <--- ADIÇÃO AQUI
+    source: Joi.string().valid("whatsapp", "instagram", "google", "indicacao", "plataforma", "site"),
   }),
 
   // Client schemas
@@ -80,8 +80,10 @@ const schemas = {
     name: Joi.string().min(2).max(255).required(),
     phone: Joi.string().min(10).max(20).required(),
     email: Joi.string().email().required(),
+    entry_date: Joi.date().default(new Date()), // <--- NOVO CAMPO
+    first_purchase_date: Joi.date().required(), // <--- NOVO CAMPO
     last_purchase: Joi.date().required(),
-    doctor: Joi.string().max(255).allow(null, ''), // Alterado para permitir nulo ou string vazia
+    doctor: Joi.string().max(255).allow(null, ''),
     specialty: Joi.string().min(2).max(255).required(),
     status: Joi.string().valid("Ativo", "Inativo").default("Ativo"),
     total_spent: Joi.number().min(0).default(0),
@@ -91,8 +93,10 @@ const schemas = {
     name: Joi.string().min(2).max(255),
     phone: Joi.string().min(10).max(20),
     email: Joi.string().email(),
+    entry_date: Joi.date(), // <--- NOVO CAMPO
+    first_purchase_date: Joi.date(), // <--- NOVO CAMPO
     last_purchase: Joi.date(),
-    doctor: Joi.string().max(255).allow(null, ''), // Alterado para permitir nulo ou string vazia
+    doctor: Joi.string().max(255).allow(null, ''),
     specialty: Joi.string().min(2).max(255),
     status: Joi.string().valid("Ativo", "Inativo"),
     total_spent: Joi.number().min(0),
@@ -110,7 +114,7 @@ const schemas = {
     target: Joi.number().min(0).required(),
     period: Joi.string().valid("daily", "weekly", "monthly", "quarterly").required(),
     funnel: Joi.string().valid("marketing", "pre-sales", "sales", "onboarding", "ongoing").allow(null),
-    source: Joi.string().valid("whatsapp", "instagram", "google", "indicacao", "plataforma", "site").allow(null), // <--- ADIÇÃO AQUI
+    source: Joi.string().valid("whatsapp", "instagram", "google", "indicacao", "plataforma", "site").allow(null),
     assigned_to: Joi.string().uuid().allow(null),
     start_date: Joi.date().required(),
     end_date: Joi.date().greater(Joi.ref("start_date")).required(),
@@ -123,7 +127,7 @@ const schemas = {
     target: Joi.number().min(0),
     period: Joi.string().valid("daily", "weekly", "monthly", "quarterly"),
     funnel: Joi.string().valid("marketing", "pre-sales", "sales", "onboarding", "ongoing").allow(null),
-    source: Joi.string().valid("whatsapp", "instagram", "google", "indicacao", "plataforma", "site").allow(null), // <--- ADIÇÃO AQUI
+    source: Joi.string().valid("whatsapp", "instagram", "google", "indicacao", "plataforma", "site").allow(null),
     start_date: Joi.date(),
     end_date: Joi.date(),
     is_active: Joi.boolean(),
@@ -143,13 +147,13 @@ const schemas = {
 
   // Schema para a conversão de lead em cliente
   convertLead: Joi.object({
-    saleValue: Joi.number().min(0).required().messages({ // Novo campo: valor da venda
+    saleValue: Joi.number().min(0).required().messages({
       "any.required": "O valor da venda é obrigatório",
       "number.min": "O valor da venda deve ser maior ou igual a 0",
     }),
-    targetFunnel: Joi.string().valid("marketing", "pre-sales", "sales", "onboarding", "ongoing").required(), // Novo campo: funil de destino
-    targetStage: Joi.string().max(100).required(), // Novo campo: estágio de destino
-    conversionDate: Joi.date().required(), // Novo campo: data da conversão/venda
+    targetFunnel: Joi.string().valid("marketing", "pre-sales", "sales", "onboarding", "ongoing").required(),
+    targetStage: Joi.string().max(100).required(),
+    conversionDate: Joi.date().required(),
   }),
 }
 

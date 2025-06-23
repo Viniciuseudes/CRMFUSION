@@ -101,21 +101,26 @@ router.post("/", validateRequest(schemas.createClient), async (req, res, next) =
       assigned_to: req.user.id,
     }
 
+    // Capture as novas datas
+    const { name, phone, email, entry_date, first_purchase_date, last_purchase, doctor, specialty, status, total_spent } = clientData; // <--- NOVOS CAMPOS AQUI
+
     const result = await pool.query(
       `
-      INSERT INTO clients (name, phone, email, last_purchase, doctor, specialty, status, total_spent, assigned_to)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      INSERT INTO clients (name, phone, email, entry_date, first_purchase_date, last_purchase, doctor, specialty, status, total_spent, assigned_to)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       RETURNING *
     `,
       [
-        clientData.name,
-        clientData.phone,
-        clientData.email,
-        clientData.last_purchase,
-        clientData.doctor,
-        clientData.specialty,
-        clientData.status,
-        clientData.total_spent,
+        name,
+        phone,
+        email,
+        entry_date,         // <--- ADICIONADO AQUI
+        first_purchase_date, // <--- ADICIONADO AQUI
+        last_purchase,
+        doctor,
+        specialty,
+        status,
+        total_spent,
         clientData.assigned_to,
       ],
     )
@@ -154,6 +159,7 @@ router.put("/:id", validateRequest(schemas.updateClient), async (req, res, next)
     let paramCount = 0
 
     Object.keys(req.body).forEach((key) => {
+      // Inclua os novos campos aqui também se eles puderem ser atualizados
       if (req.body[key] !== undefined) {
         paramCount++
         updates.push(`${key} = $${paramCount}`)

@@ -337,6 +337,180 @@ router.get("/leads-timeline", async (req, res, next) => {
   }
 })
 
+
+// ***** NOVAS ROTAS DE ANÁLISE DE CLIENTES *****
+
+// Análise de clientes por especialidade
+router.get("/client-specialty-analysis", async (req, res, next) => {
+  try {
+    const { period = "all" } = req.query; // 'all' ou número de dias (e.g., '365')
+    let dateFilter = '';
+    const params = [];
+    let paramCount = 0;
+
+    if (period !== "all") {
+      const days = Number.parseInt(period);
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - days);
+      paramCount++;
+      dateFilter = ` AND c.created_at >= $${paramCount}`;
+      params.push(startDate);
+    }
+
+    // Permissão: Colaborador vê apenas seus clientes
+    if (req.user.role !== "admin") {
+      paramCount++;
+      dateFilter += ` AND c.assigned_to = $${paramCount}`;
+      params.push(req.user.id);
+    }
+
+    const result = await pool.query(
+      `
+      SELECT 
+        specialty,
+        COUNT(id) as total_clients,
+        SUM(total_spent) as total_revenue,
+        AVG(total_spent) as avg_revenue_per_client
+      FROM clients c
+      WHERE 1=1 ${dateFilter}
+      GROUP BY specialty
+      ORDER BY total_clients DESC
+      `,
+      params
+    );
+
+    res.json(result.rows.map(row => ({
+      specialty: row.specialty,
+      totalClients: Number.parseInt(row.total_clients),
+      totalRevenue: Number.parseFloat(row.total_revenue) || 0,
+      avgRevenuePerClient: Number.parseFloat(row.avg_revenue_per_client) || 0,
+    })));
+
+  } catch (error) {
+    next(error);
+  }
+});
+
+
+// Análise de Lifetime Value (LTV)
+router.get("/ltv-analysis", async (req, res, next) => {
+  try {
+    const { period = "all" } = req.query; // 'all' ou número de dias
+    let dateFilter = '';
+    const params = [];
+    let paramCount = 0;
+
+    if (period !== "all") {
+      const days = Number.parseInt(period);
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - days);
+      paramCount++;
+      dateFilter = ` AND c.created_at >= $${paramCount}`;
+      params.push(startDate);
+    }
+
+    if (req.user.role !== "admin") {
+      paramCount++;
+      dateFilter += ` AND c.assigned_to = $${paramCount}`;
+      params.push(req.user.id);
+    }
+
+    // LTV simplificado: Soma do total_spent dividido pelo número de clientes únicos
+    // Para uma abordagem mais sofisticada, precisaríamos de histórico de compras individuais
+    const result = await pool.query(
+      `
+      SELECT 
+        COUNT(id) as total_clients,
+        COALESCE(SUM(total_spent), 0) as total_lifetime_revenue,
+        AVG(EXTRACT(DAY FROM (CURRENT_DATE - entry_date))) as avg_client_days
+      FROM clients c
+      WHERE 1=1 ${dateFilter}
+      `,
+      params
+    );
+
+    const data = result.rows[0];
+    const totalClients = Number.parseInt(data.total_clients) || 0;
+    const totalLifetimeRevenue = Number.parseFloat(data.total_lifetime_revenue) || 0;
+    const avgClientDays = Number.parseFloat(data.avg_client_days) || 0;
+
+    let ltv = 0;
+    if (totalClients > 0 && avgClientDays > 0) {
+      // LTV = (Receita Total / Número de Clientes) * (Tempo de Vida Médio do Cliente) / 365 (para anualizar)
+      // Aqui vamos usar uma simplificação: (Receita Total / Número de Clientes) = Ticket Médio por Cliente ao longo do tempo.
+      // O campo total_spent já representa o valor acumulado pelo cliente.
+      // Então, LTV = Receita Total de Todos os Clientes / Total de Clientes
+      ltv = totalLifetimeRevenue / totalClients;
+    }
+
+    res.json({
+      totalClients,
+      totalLifetimeRevenue: totalLifetimeRevenue,
+      averageLTV: ltv,
+      avgClientLifespanDays: Math.round(avgClientDays),
+    });
+
+  } catch (error) {
+    next(error);
+  }
+});
+
+
+// Análise de Monthly Recurring Revenue (MRR)
+router.get("/mrr-analysis", async (req, res, next) => {
+  try {
+    const { months = "6" } = req.query; // Número de meses para calcular o MRR
+    const monthsBack = Number.parseInt(months);
+    const startDate = subMonths(new Date(), monthsBack);
+
+    // MRR simplificado: Soma das compras nos últimos N meses / N meses
+    // ou seja, receita média mensal dos clientes ativos
+    let query = `
+      SELECT 
+        DATE_TRUNC('month', c.last_purchase) as month,
+        SUM(c.total_spent) as monthly_revenue
+      FROM clients c
+      WHERE c.last_purchase >= $1
+    `;
+    const params = [startDate];
+    let paramCount = 1;
+
+    if (req.user.role !== "admin") {
+      paramCount++;
+      query += ` AND c.assigned_to = $${paramCount}`;
+      params.push(req.user.id);
+    }
+
+    query += ` GROUP BY DATE_TRUNC('month', c.last_purchase) ORDER BY month DESC`;
+
+    const result = await pool.query(query, params);
+
+    const monthlyData = {};
+    let totalRevenueSum = 0;
+    let monthsWithRevenue = 0;
+
+    result.rows.forEach(row => {
+      const monthKey = format(new Date(row.month), "yyyy-MM");
+      const revenue = Number.parseFloat(row.monthly_revenue) || 0;
+      monthlyData[monthKey] = revenue;
+      totalRevenueSum += revenue;
+      monthsWithRevenue++;
+    });
+
+    const mrr = monthsWithRevenue > 0 ? (totalRevenueSum / monthsWithRevenue) : 0;
+
+    res.json({
+      monthlyRevenue: monthlyData,
+      averageMRR: mrr,
+      calculatedOverMonths: monthsWithRevenue,
+    });
+
+  } catch (error) {
+    next(error);
+  }
+});
+
+
 // Exportar dados para backup
 router.get("/export", async (req, res, next) => {
   try {
