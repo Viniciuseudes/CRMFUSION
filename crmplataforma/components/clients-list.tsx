@@ -109,6 +109,10 @@ export function ClientsList() {
       name: formData.get("name") as string,
       phone: formData.get("phone") as string,
       email: formData.get("email") as string,
+      // ***** NOVOS CAMPOS AQUI *****
+      entry_date: formData.get("entry_date") as string, // Captura a data de entrada
+      first_purchase_date: formData.get("first_purchase_date") as string, // Captura a data da primeira compra
+      // ***** FIM DOS NOVOS CAMPOS *****
       last_purchase: formData.get("last_purchase") as string,
       doctor: formData.get("doctor") as string,
       specialty: formData.get("specialty") as string,
@@ -121,14 +125,22 @@ export function ClientsList() {
         await clientsAPI.update(selectedClient.id, clientData);
         toast({ title: "Cliente atualizado" });
       } else {
-        await clientsAPI.create(clientData as any);
+        await clientsAPI.create(clientData as any); // O tipo any é necessário aqui porque o clientData não tem entry_date e first_purchase_date que são required na interface do Client no apiClient.ts. Iremos corrigir isso no apiClient.ts no próximo passo.
         toast({ title: "Cliente criado" });
       }
       await loadClients();
       setIsFormDialogOpen(false);
       setSelectedClient(null);
     } catch (error) {
-      toast({ title: "Erro ao salvar cliente", variant: "destructive" });
+      console.error("Erro ao salvar cliente:", error); // Adicionado log detalhado do erro
+      toast({
+        title: "Erro ao salvar cliente",
+        description:
+          (error as any).response?.data?.message ||
+          (error as any).response?.data?.error ||
+          "Verifique os dados.",
+        variant: "destructive",
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -369,6 +381,44 @@ export function ClientsList() {
                 required
               />
             </div>
+            {/* ***** NOVOS CAMPOS DE DATA AQUI ***** */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="entry_date">Data de Entrada</Label>
+                <Input
+                  id="entry_date"
+                  name="entry_date"
+                  type="date"
+                  // Se editando, use a data existente; caso contrário, a data atual
+                  defaultValue={
+                    selectedClient?.entry_date
+                      ? new Date(selectedClient.entry_date)
+                          .toISOString()
+                          .split("T")[0]
+                      : new Date().toISOString().split("T")[0]
+                  }
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="first_purchase_date">Primeira Compra</Label>
+                <Input
+                  id="first_purchase_date"
+                  name="first_purchase_date"
+                  type="date"
+                  // Se editando, use a data existente; caso contrário, a data atual
+                  defaultValue={
+                    selectedClient?.first_purchase_date
+                      ? new Date(selectedClient.first_purchase_date)
+                          .toISOString()
+                          .split("T")[0]
+                      : new Date().toISOString().split("T")[0]
+                  }
+                  required
+                />
+              </div>
+            </div>
+            {/* ***** FIM DOS NOVOS CAMPOS DE DATA ***** */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="last_purchase">Última Compra</Label>
@@ -412,6 +462,17 @@ export function ClientsList() {
                     <SelectItem value="Cardiologia">Cardiologia</SelectItem>
                     <SelectItem value="Dermatologia">Dermatologia</SelectItem>
                     <SelectItem value="Ortopedia">Ortopedia</SelectItem>
+                    <SelectItem value="Enfermagem">Enfermagem</SelectItem>
+                    <SelectItem value="Farmacia">Farmacia</SelectItem>
+                    <SelectItem value="Medicina">Medicina</SelectItem>
+                    <SelectItem value="Biomedicina">Biomedicina</SelectItem>
+                    <SelectItem value="Esteticista">Esteticista</SelectItem>
+                    <SelectItem value="Psicologia">Psicologia</SelectItem>
+                    <SelectItem value="Nutricionista">Nutricionista</SelectItem>
+                    <SelectItem value="Odontologia">Odontologia</SelectItem>
+                    <SelectItem value="Pediatria">Pediatria</SelectItem>
+                    <SelectItem value="Neurologia">Neurologia</SelectItem>
+                    <SelectItem value="Ginecologia">Ginecologia</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
