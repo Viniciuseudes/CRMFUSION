@@ -75,8 +75,8 @@ export interface Lead {
   notes?: string;
   source: "whatsapp" | "instagram" | "google" | "indicacao" | "plataforma" | "site";
   assigned_to?: string; // UUID do usuário
-  is_converted_client?: boolean; // <--- NOVA PROPRIEDADE
-  client_id?: number; // <--- NOVA PROPRIEDADE
+  is_converted_client?: boolean;
+  client_id?: number;
   created_at: string;
   updated_at: string;
   assigned_to_name?: string; // Nome do usuário atribuído (via JOIN no backend)
@@ -87,6 +87,8 @@ export interface Client {
   name: string;
   phone: string;
   email: string;
+  entry_date: string; // <--- NOVA PROPRIEDADE
+  first_purchase_date: string; // <--- NOVA PROPRIEDADE
   last_purchase: string;
   doctor: string;
   specialty: string;
@@ -179,7 +181,7 @@ export const authAPI = {
     name: string;
     email: string;
     password: string;
-    role: "admin" | "gerente" | "colaborador"; // Tipado para corresponder a User.role
+    role: "admin" | "gerente" | "colaborador";
     permissions: string[];
   }): Promise<{ message: string; user: User }> => {
     const response = await apiClient.post("/auth/register", userData);
@@ -234,8 +236,8 @@ export const usersAPI = {
 };
 
 // Leads
-type CreateLeadData = Omit<Lead, "id" | "created_at" | "updated_at" | "assigned_to" | "assigned_to_name" | "entry_date" | "is_converted_client" | "client_id">; // <--- ATUALIZADO AQUI
-type UpdateLeadData = Partial<Omit<Lead, "id" | "created_at" | "updated_at" | "assigned_to" | "assigned_to_name" | "entry_date" | "is_converted_client" | "client_id">>; // <--- ATUALIZADO AQUI
+type CreateLeadData = Omit<Lead, "id" | "created_at" | "updated_at" | "assigned_to" | "assigned_to_name" | "entry_date" | "is_converted_client" | "client_id">;
+type UpdateLeadData = Partial<Omit<Lead, "id" | "created_at" | "updated_at" | "assigned_to" | "assigned_to_name" | "entry_date" | "is_converted_client" | "client_id">>;
 
 export const leadsAPI = {
   getAll: async (): Promise<PaginatedLeadsResponse> => {
@@ -270,7 +272,7 @@ export const leadsAPI = {
       targetStage: string;
       conversionDate: string;
     }
-  ): Promise<{ message: string; lead: Lead; client: Client }> => { // <--- ATUALIZADO O TIPO DE RETORNO
+  ): Promise<{ message: string; lead: Lead; client: Client }> => {
     const response = await apiClient.post(`/leads/${id}/convert`, conversionData);
     return response.data;
   },
@@ -379,17 +381,17 @@ export const activitiesAPI = {
 // Reports
 export const reportsAPI = {
   getStats: async (p0: { period: string }): Promise<any> => {
-    const response = await apiClient.get("/reports/stats");
+    const response = await apiClient.get("/reports/stats", { params: p0 }); // <--- Adicionado params
     return response.data;
   },
 
   getFunnelStats: async (p0: { period: string }): Promise<any> => {
-    const response = await apiClient.get("/reports/funnel-stats");
+    const response = await apiClient.get("/reports/funnel-stats", { params: p0 }); // <--- Adicionado params
     return response.data;
   },
 
   getSourceStats: async (p0: { period: string }): Promise<any> => {
-    const response = await apiClient.get("/reports/source-stats");
+    const response = await apiClient.get("/reports/source-stats", { params: p0 }); // <--- Adicionado params
     return response.data;
   },
 
@@ -399,7 +401,7 @@ export const reportsAPI = {
   },
 
   getUserPerformance: async (p0: { period: string }): Promise<any> => {
-    const response = await apiClient.get("/reports/user-performance");
+    const response = await apiClient.get("/reports/user-performance", { params: p0 }); // <--- Adicionado params
     return response.data;
   },
 
@@ -412,6 +414,23 @@ export const reportsAPI = {
     const response = await apiClient.get("/reports/ltv-timeline");
     return response.data;
   },
+
+  // ***** NOVAS FUNÇÕES PARA ANÁLISE DE CLIENTES *****
+  getClientSpecialtyAnalysis: async (params?: { period?: string }): Promise<any> => {
+    const response = await apiClient.get("/reports/client-specialty-analysis", { params });
+    return response.data;
+  },
+
+  getLtvAnalysis: async (params?: { period?: string }): Promise<any> => {
+    const response = await apiClient.get("/reports/ltv-analysis", { params });
+    return response.data;
+  },
+
+  getMrrAnalysis: async (params?: { months?: string }): Promise<any> => {
+    const response = await apiClient.get("/reports/mrr-analysis", { params });
+    return response.data;
+  },
+  // ***** FIM DAS NOVAS FUNÇÕES PARA ANÁLISE DE CLIENTES *****
 
   exportData: async (): Promise<any> => {
     const response = await apiClient.get("/reports/export");
