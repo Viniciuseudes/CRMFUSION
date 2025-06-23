@@ -261,11 +261,10 @@ export function LeadsFunnel() {
     }
   };
 
-  // ***** MUDANÇAS AQUI: Lógica de conversão do Lead *****
   const handleOpenConvertDialog = (lead: Lead) => {
     setLeadToConvert(lead);
-    setSaleValue(lead.value > 0 ? lead.value : ""); // Preenche com o valor de oportunidade se existir
-    setConversionDate(new Date().toISOString().split("T")[0]); // Data atual
+    setSaleValue(lead.value > 0 ? lead.value : "");
+    setConversionDate(new Date().toISOString().split("T")[0]);
     setIsConvertDialogOpen(true);
   };
 
@@ -282,7 +281,7 @@ export function LeadsFunnel() {
       return;
     }
 
-    setIsLoading(true); // Pode usar um estado de loading local para o modal se preferir
+    setIsLoading(true);
     try {
       const ongoingFunnel = funnels.find((f) => f.id === "ongoing");
       if (!ongoingFunnel || ongoingFunnel.stages.length === 0) {
@@ -295,23 +294,37 @@ export function LeadsFunnel() {
         return;
       }
 
-      // Enviando o valor da venda e o funil/estágio de destino
-      await leadsAPI.convert(leadToConvert.id, {
+      const response = await leadsAPI.convert(leadToConvert.id, {
+        // <--- ATUALIZADO AQUI
         saleValue: Number(saleValue),
         targetFunnel: "ongoing",
         targetStage: ongoingFunnel.stages[0].id,
-        conversionDate: conversionDate, // Envia a data da conversão
+        conversionDate: conversionDate,
       });
 
-      toast({
-        title: "Lead convertido",
-        description: `${leadToConvert.name} foi convertido em cliente no funil 'Ongoing'.`,
-      });
-      fetchLeads(); // Recarrega os leads para refletir a remoção do lead e possível adição do cliente (se o backend retornar cliente)
+      // ATUALIZADO AQUI: Agora esperamos o lead atualizado e o cliente
+      if (response.lead) {
+        // Atualiza o estado local de leads com o lead modificado
+        setLeads((prevLeads) =>
+          prevLeads.map((l) => (l.id === response.lead.id ? response.lead : l))
+        );
+        toast({
+          title: "Lead convertido!",
+          description: `${response.lead.name} foi convertido em cliente e movido para o funil 'Ongoing'.`,
+        });
+      } else {
+        // Fallback caso a API não retorne o lead atualizado como esperado
+        toast({
+          title: "Lead convertido!",
+          description: `${leadToConvert.name} foi convertido em cliente. Recarregando dados...`,
+        });
+        fetchLeads(); // Recarrega tudo se o lead atualizado não vier na resposta
+      }
+
       setIsConvertDialogOpen(false);
       setLeadToConvert(null);
       setSaleValue("");
-      setConversionDate(new Date().toISOString().split("T")[0]); // Reseta
+      setConversionDate(new Date().toISOString().split("T")[0]);
     } catch (error) {
       console.error("Erro ao converter lead:", error);
       toast({
@@ -323,7 +336,6 @@ export function LeadsFunnel() {
       setIsLoading(false);
     }
   };
-  // ***** FIM DAS MUDANÇAS NA Lógica de conversão do Lead *****
 
   const updateLeadOnAPI = async (leadId: number, updates: Partial<Lead>) => {
     try {
@@ -881,7 +893,6 @@ export function LeadsFunnel() {
         </DialogContent>
       </Dialog>
 
-      {/* ***** NOVO DIÁLOGO DE CONVERSÃO DE LEAD ***** */}
       <Dialog open={isConvertDialogOpen} onOpenChange={setIsConvertDialogOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
@@ -938,7 +949,6 @@ export function LeadsFunnel() {
           </form>
         </DialogContent>
       </Dialog>
-      {/* ***** FIM DO NOVO DIÁLOGO DE CONVERSÃO DE LEAD ***** */}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {currentFunnelData.stages.map((stage, stageIndex) => {
@@ -970,7 +980,11 @@ export function LeadsFunnel() {
                     key={`${lead.id}-${lead.stage}-${
                       lead.updated_at || lead.created_at
                     }`}
-                    className="hover:shadow-lg transition-shadow w-full bg-card"
+                    className={`hover:shadow-lg transition-shadow w-full bg-card ${
+                      lead.is_converted_client
+                        ? "border-green-400 border-2"
+                        : "" // <--- ADIÇÃO AQUI: Estilo para leads convertidos
+                    }`}
                   >
                     <CardContent className="p-3">
                       <div className="flex items-start gap-3">
@@ -1020,6 +1034,15 @@ export function LeadsFunnel() {
                                 {tag}
                               </Badge>
                             ))}
+                            {/* <--- ADIÇÃO AQUI: Badge para cliente convertido */}
+                            {lead.is_converted_client && (
+                              <Badge
+                                variant="default"
+                                className="bg-green-500 hover:bg-green-600 text-white text-xs px-1.5 py-0.5"
+                              >
+                                Cliente Convertido
+                              </Badge>
+                            )}
                           </div>
                           <div className="space-y-0.5 text-xs text-muted-foreground">
                             <div className="flex items-center gap-1">
@@ -1085,6 +1108,7 @@ export function LeadsFunnel() {
                                 variant="outline"
                                 className="h-6 text-xs px-2"
                                 onClick={() => moveToPreviousStage(lead)}
+                                disabled={lead.is_converted_client}
                               >
                                 <ChevronLeft className="h-3 w-3" />
                               </Button>
@@ -1096,6 +1120,7 @@ export function LeadsFunnel() {
                                 variant="default"
                                 className="h-6 text-xs px-2"
                                 onClick={() => moveToNextStage(lead)}
+                                disabled={lead.is_converted_client}
                               >
                                 <ChevronRight className="h-3 w-3" />
                               </Button>
@@ -1108,6 +1133,7 @@ export function LeadsFunnel() {
                                 setSelectedLeadId(lead.id);
                                 setMoveFunnelDialogOpen(true);
                               }}
+                              disabled={lead.is_converted_client}
                             >
                               <MoveRight className="h-3 w-3 mr-1" />
                               Mover
@@ -1118,10 +1144,14 @@ export function LeadsFunnel() {
                                   size="sm"
                                   variant="default"
                                   className="h-6 text-xs px-2 bg-green-500 hover:bg-green-600 text-white"
-                                  onClick={() => handleOpenConvertDialog(lead)} // <--- MUDANÇA AQUI: Abrir diálogo de conversão
+                                  onClick={() => handleOpenConvertDialog(lead)}
+                                  disabled={lead.is_converted_client}
                                 >
                                   <UserCheck className="h-3 w-3 mr-1" />
-                                  Converter
+                                  {lead.is_converted_client
+                                    ? "Convertido"
+                                    : "Converter"}{" "}
+                                  {/* <--- TEXTO DO BOTÃO */}
                                 </Button>
                               )}
                           </div>

@@ -73,8 +73,10 @@ export interface Lead {
   avatar?: string;
   value: number;
   notes?: string;
-  source: "whatsapp" | "instagram" | "google" | "indicacao" | "plataforma" | "site"; // <--- MUDANÇA AQUI
+  source: "whatsapp" | "instagram" | "google" | "indicacao" | "plataforma" | "site";
   assigned_to?: string; // UUID do usuário
+  is_converted_client?: boolean; // <--- NOVA PROPRIEDADE
+  client_id?: number; // <--- NOVA PROPRIEDADE
   created_at: string;
   updated_at: string;
   assigned_to_name?: string; // Nome do usuário atribuído (via JOIN no backend)
@@ -197,7 +199,7 @@ export const authAPI = {
 
 // Users
 export const usersAPI = {
-  getAll: async (): Promise<PaginatedUsersResponse> => { // AJUSTADO
+  getAll: async (): Promise<PaginatedUsersResponse> => {
     const response = await apiClient.get("/users");
     return response.data;
   },
@@ -232,10 +234,8 @@ export const usersAPI = {
 };
 
 // Leads
-// Omitindo campos que são gerados pelo backend (id, created_at, updated_at, assigned_to, assigned_to_name)
-// E AGORA TAMBÉM OMITINDO 'entry_date' porque ele será gerado automaticamente.
-type CreateLeadData = Omit<Lead, "id" | "created_at" | "updated_at" | "assigned_to" | "assigned_to_name" | "entry_date">; // <<< AQUI ESTÁ A MUDANÇA
-type UpdateLeadData = Partial<Omit<Lead, "id" | "created_at" | "updated_at" | "assigned_to" | "assigned_to_name" | "entry_date">>; // <<< E AQUI TAMBÉM
+type CreateLeadData = Omit<Lead, "id" | "created_at" | "updated_at" | "assigned_to" | "assigned_to_name" | "entry_date" | "is_converted_client" | "client_id">; // <--- ATUALIZADO AQUI
+type UpdateLeadData = Partial<Omit<Lead, "id" | "created_at" | "updated_at" | "assigned_to" | "assigned_to_name" | "entry_date" | "is_converted_client" | "client_id">>; // <--- ATUALIZADO AQUI
 
 export const leadsAPI = {
   getAll: async (): Promise<PaginatedLeadsResponse> => {
@@ -262,8 +262,15 @@ export const leadsAPI = {
     await apiClient.delete(`/leads/${id}`);
   },
 
-  // ***** MUDANÇA AQUI: Adicionado os novos parâmetros para convert *****
-  convert: async (id: number, conversionData: { saleValue: number; targetFunnel: string; targetStage: string; conversionDate: string }): Promise<Client> => {
+  convert: async (
+    id: number,
+    conversionData: {
+      saleValue: number;
+      targetFunnel: string;
+      targetStage: string;
+      conversionDate: string;
+    }
+  ): Promise<{ message: string; lead: Lead; client: Client }> => { // <--- ATUALIZADO O TIPO DE RETORNO
     const response = await apiClient.post(`/leads/${id}/convert`, conversionData);
     return response.data;
   },
@@ -274,7 +281,7 @@ type CreateClientData = Omit<Client, "id" | "created_at" | "updated_at" | "assig
 type UpdateClientData = Partial<Omit<Client, "id" | "created_at" | "updated_at" | "assigned_to" | "assigned_to_name">>;
 
 export const clientsAPI = {
-  getAll: async (): Promise<PaginatedClientsResponse> => { // AJUSTADO
+  getAll: async (): Promise<PaginatedClientsResponse> => {
     const response = await apiClient.get("/clients");
     return response.data;
   },
@@ -284,12 +291,12 @@ export const clientsAPI = {
     return response.data;
   },
 
-  create: async (clientData: CreateClientData): Promise<Client> => { // AJUSTADO
+  create: async (clientData: CreateClientData): Promise<Client> => {
     const response = await apiClient.post("/clients", clientData);
     return response.data;
   },
 
-  update: async (id: number, clientData: UpdateClientData): Promise<Client> => { // AJUSTADO
+  update: async (id: number, clientData: UpdateClientData): Promise<Client> => {
     const response = await apiClient.put(`/clients/${id}`, clientData);
     return response.data;
   },
@@ -298,7 +305,7 @@ export const clientsAPI = {
     await apiClient.delete(`/clients/${id}`);
   },
 
-  getActivities: async (clientId: number): Promise<PaginatedActivitiesResponse> => { // AJUSTADO
+  getActivities: async (clientId: number): Promise<PaginatedActivitiesResponse> => {
     const response = await apiClient.get(`/clients/${clientId}/activities`);
     return response.data;
   },
@@ -315,7 +322,7 @@ type UpdateGoalData = Partial<Omit<Goal, "id" | "created_at" | "updated_at" | "a
 
 
 export const goalsAPI = {
-  getAll: async (p0: any): Promise<PaginatedGoalsResponse> => { // AJUSTADO
+  getAll: async (p0: any): Promise<PaginatedGoalsResponse> => {
     const response = await apiClient.get("/goals");
     return response.data;
   },
@@ -325,12 +332,12 @@ export const goalsAPI = {
     return response.data;
   },
 
-  create: async (goalData: CreateGoalData): Promise<Goal> => { // AJUSTADO
+  create: async (goalData: CreateGoalData): Promise<Goal> => {
     const response = await apiClient.post("/goals", goalData);
     return response.data;
   },
 
-  update: async (id: string, goalData: UpdateGoalData): Promise<Goal> => { // AJUSTADO
+  update: async (id: string, goalData: UpdateGoalData): Promise<Goal> => {
     const response = await apiClient.put(`/goals/${id}`, goalData);
     return response.data;
   },
@@ -339,18 +346,17 @@ export const goalsAPI = {
     await apiClient.delete(`/goals/${id}`);
   },
 
-  getProgress: async (id: string): Promise<any> => { // Defina um tipo mais específico se souber a estrutura.
+  getProgress: async (id: string): Promise<any> => {
     const response = await apiClient.get(`/goals/${id}/progress`);
     return response.data;
   },
 };
 
 // Activities
-// Para 'create', 'user_id' é definido pelo backend via token.
 type CreateActivityData = Omit<Activity, "id" | "created_at" | "user_id" | "user_name" | "lead_name" | "client_name">;
 
 export const activitiesAPI = {
-  getAll: async (p0: any): Promise<PaginatedActivitiesResponse> => { // AJUSTADO
+  getAll: async (p0: any): Promise<PaginatedActivitiesResponse> => {
     const response = await apiClient.get("/activities");
     return response.data;
   },
@@ -360,7 +366,7 @@ export const activitiesAPI = {
     return response.data;
   },
 
-  create: async (activityData: CreateActivityData): Promise<Activity> => { // AJUSTADO
+  create: async (activityData: CreateActivityData): Promise<Activity> => {
     const response = await apiClient.post("/activities", activityData);
     return response.data;
   },
@@ -371,8 +377,6 @@ export const activitiesAPI = {
 };
 
 // Reports
-// Para as funções de reports, o tipo de retorno `any` pode ser mantido por enquanto,
-// ou você pode criar interfaces específicas se souber a estrutura exata das respostas.
 export const reportsAPI = {
   getStats: async (p0: { period: string }): Promise<any> => {
     const response = await apiClient.get("/reports/stats");
