@@ -5,7 +5,6 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Enum types
 CREATE TYPE user_role AS ENUM ('admin', 'gerente', 'colaborador');
--- <--- MUDANÇA AQUI na linha abaixo
 CREATE TYPE lead_source AS ENUM ('whatsapp', 'instagram', 'google', 'indicacao', 'plataforma', 'site');
 CREATE TYPE lead_funnel AS ENUM ('marketing', 'pre-sales', 'sales', 'onboarding', 'ongoing');
 CREATE TYPE client_status AS ENUM ('Ativo', 'Inativo');
@@ -44,6 +43,9 @@ CREATE TABLE leads (
     notes TEXT,
     source lead_source NOT NULL,
     assigned_to UUID REFERENCES users(id),
+    -- <--- NOVA COLUNA AQUI
+    is_converted_client BOOLEAN DEFAULT FALSE,
+    client_id INTEGER REFERENCES clients(id) ON DELETE SET NULL, -- Opcional: para vincular o lead ao cliente criado
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

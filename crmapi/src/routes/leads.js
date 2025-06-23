@@ -247,13 +247,12 @@ router.delete("/:id", async (req, res, next) => {
 })
 
 // Converter lead em cliente
-router.post("/:id/convert", validateRequest(schemas.convertLead), async (req, res, next) => { // <--- Adicionado validateRequest com o novo schema
+router.post("/:id/convert", validateRequest(schemas.convertLead), async (req, res, next) => {
   const client = await pool.connect()
   try {
     await client.query("BEGIN")
     const { id } = req.params
-    // Captura os novos dados do corpo da requisição
-    const { saleValue, targetFunnel, targetStage, conversionDate } = req.body; // <--- NOVOS CAMPOS
+    const { saleValue, targetFunnel, targetStage, conversionDate } = req.body;
 
     const leadResult = await client.query("SELECT * FROM leads WHERE id = $1", [id])
     if (leadResult.rows.length === 0) {
@@ -267,6 +266,7 @@ router.post("/:id/convert", validateRequest(schemas.convertLead), async (req, re
         return res.status(403).json({ error: "Permissão insuficiente para converter este lead" });
     }
     
+    // 1. Criar o cliente
     const clientResult = await client.query(
       `
       INSERT INTO clients (name, phone, email, last_purchase, doctor, specialty, status, total_spent, assigned_to)
@@ -277,40 +277,60 @@ router.post("/:id/convert", validateRequest(schemas.convertLead), async (req, re
         lead.name,
         lead.phone,
         lead.email,
-        conversionDate, // <--- Usa a data da conversão fornecida
-        lead.doctor || null, // Garante que doctor pode ser nulo
+        conversionDate,
+        lead.doctor || null,
         lead.specialty,
-        "Ativo", // Cliente sempre começa como Ativo
-        saleValue, // <--- Usa o valor da venda fornecido
+        "Ativo",
+        saleValue,
         lead.assigned_to
       ]
     )
     const newClient = clientResult.rows[0]
 
-    // Atualiza o funil e estágio do lead para o destino, antes de excluí-lo
-    // Isso é útil para o log de atividades de stage/funnel_change se houver dependência.
-    // Embora o lead vá ser deletado, registrar essa transição pode ser relevante.
-    // Ou podemos simplesmente deletá-lo. Vamos deletá-lo diretamente, mas registrar a atividade.
-    
+    // 2. Atualizar o lead (em vez de deletar)
+    const updatedLeadResult = await client.query(
+      `
+      UPDATE leads
+      SET 
+        funnel = $1,
+        stage = $2,
+        is_converted_client = TRUE,
+        client_id = $3, -- Vincula ao cliente criado
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $4
+      RETURNING *
+    `,
+      [
+        targetFunnel,
+        targetStage,
+        newClient.id, // ID do cliente recém-criado
+        id
+      ]
+    );
+
+    const updatedLead = updatedLeadResult.rows[0]; // O lead atualizado
+
+    // 3. Registrar atividade de conversão
     await client.query(`INSERT INTO activities (lead_id, client_id, type, description, user_id) VALUES ($1, $2, $3, $4, $5)`, 
     [
       lead.id, 
       newClient.id, 
       "conversion", 
-      `Lead ${lead.name} convertido em cliente com venda de R$ ${saleValue.toFixed(2)}`, // <--- Mensagem mais detalhada
+      `Lead ${lead.name} convertido em cliente com venda de R$ ${saleValue.toFixed(2)}. Funil: ${targetFunnel}, Estágio: ${targetStage}`,
       req.user.id
     ]);
 
-    // Opcional: Se desejar, registre a mudança de funil/estágio do lead ANTES de deletá-lo, para ter um histórico mais completo,
-    // embora o lead será removido logo em seguida.
-    // await client.query(`INSERT INTO activities (lead_id, type, description, user_id) VALUES ($1, 'funnel_change', 'Lead movido para funil ${targetFunnel} antes da conversão', $2)`, [lead.id, req.user.id]);
-    // await client.query(`INSERT INTO activities (lead_id, type, description, user_id) VALUES ($1, 'stage_change', 'Lead movido para estágio ${targetStage} antes da conversão', $2)`, [lead.id, req.user.id]);
+    // 4. Registrar as mudanças de funil e estágio do lead (agora que ele é "cliente convertido")
+    await client.query(`INSERT INTO activities (lead_id, type, description, user_id) VALUES ($1, $2, $3, $4)`, 
+    [lead.id, "funnel_change", `Lead ${lead.name} movido para funil ${targetFunnel} (convertido)`, req.user.id]);
+    
+    await client.query(`INSERT INTO activities (lead_id, type, description, user_id) VALUES ($1, $2, $3, $4)`, 
+    [lead.id, "stage_change", `Lead ${lead.name} movido para estágio ${targetStage} (convertido)`, req.user.id]);
 
-
-    await client.query("DELETE FROM leads WHERE id = $1", [id])
     await client.query("COMMIT")
 
-    res.json({ message: "Lead convertido com sucesso", client: newClient })
+    // Retorna o lead ATUALIZADO para o frontend (com is_converted_client e novo funil/estágio)
+    res.json({ message: "Lead convertido e atualizado com sucesso", lead: updatedLead, client: newClient })
   } catch (error) {
     await client.query("ROLLBACK")
     next(error)
