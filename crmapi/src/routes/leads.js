@@ -269,15 +269,17 @@ router.post("/:id/convert", validateRequest(schemas.convertLead), async (req, re
     // 1. Criar o cliente
     const clientResult = await client.query(
       `
-      INSERT INTO clients (name, phone, email, last_purchase, doctor, specialty, status, total_spent, assigned_to)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      INSERT INTO clients (name, phone, email, entry_date, first_purchase_date, last_purchase, doctor, specialty, status, total_spent, assigned_to)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       RETURNING *
     `,
       [
         lead.name,
         lead.phone,
         lead.email,
-        conversionDate,
+        conversionDate, // <--- ADICIONADO: entry_date (usando a data da conversão)
+        conversionDate, // <--- ADICIONADO: first_purchase_date (usando a data da conversão)
+        conversionDate, // last_purchase
         lead.doctor || null,
         lead.specialty,
         "Ativo",
@@ -295,7 +297,7 @@ router.post("/:id/convert", validateRequest(schemas.convertLead), async (req, re
         funnel = $1,
         stage = $2,
         is_converted_client = TRUE,
-        client_id = $3, -- Vincula ao cliente criado
+        client_id = $3,
         updated_at = CURRENT_TIMESTAMP
       WHERE id = $4
       RETURNING *
@@ -303,12 +305,12 @@ router.post("/:id/convert", validateRequest(schemas.convertLead), async (req, re
       [
         targetFunnel,
         targetStage,
-        newClient.id, // ID do cliente recém-criado
+        newClient.id,
         id
       ]
     );
 
-    const updatedLead = updatedLeadResult.rows[0]; // O lead atualizado
+    const updatedLead = updatedLeadResult.rows[0];
 
     // 3. Registrar atividade de conversão
     await client.query(`INSERT INTO activities (lead_id, client_id, type, description, user_id) VALUES ($1, $2, $3, $4, $5)`, 
