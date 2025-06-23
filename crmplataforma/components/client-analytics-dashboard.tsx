@@ -338,26 +338,32 @@ export function ClientAnalyticsDashboard() {
             </CardHeader>
             <CardContent className="pl-2">
               <ResponsiveContainer width="100%" height={300}>
-                <LineChart
-                  data={Object.keys(mrrData?.monthlyRevenue || {}).map(
-                    (month) => ({
-                      month,
-                      revenue: mrrData?.monthlyRevenue[month],
-                    })
-                  )}
-                >
+                {/* INÍCIO DA CORREÇÃO */}
+                <LineChart data={mrrData?.monthlyRevenue || []}>
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="month" />
+                  <XAxis
+                    dataKey="month"
+                    tickFormatter={(value) =>
+                      format(parseISO(`${value}-01`), "MMM/yy", {
+                        locale: ptBR,
+                      })
+                    }
+                  />
                   <YAxis
                     tickFormatter={(value) =>
                       `R$ ${value.toLocaleString("pt-BR")}`
                     }
                   />
                   <Tooltip
-                    formatter={(value) => [
+                    formatter={(value: number) => [
                       `R$ ${value.toLocaleString("pt-BR")}`,
                       "Receita",
                     ]}
+                    labelFormatter={(label) =>
+                      format(parseISO(`${label}-01`), "MMMM yyyy", {
+                        locale: ptBR,
+                      })
+                    }
                   />
                   <Legend />
                   <Line
@@ -368,6 +374,7 @@ export function ClientAnalyticsDashboard() {
                     name="Receita Mensal"
                   />
                 </LineChart>
+                {/* FIM DA CORREÇÃO */}
               </ResponsiveContainer>
             </CardContent>
           </Card>
