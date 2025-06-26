@@ -51,6 +51,17 @@ import {
 } from "@/components/ui/select";
 import { clientsAPI, type Client } from "@/lib/api-client";
 import { useToast } from "@/hooks/use-toast";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination"; // <--- Importação dos componentes de paginação
+
+const CLIENTS_PER_PAGE = 10; // <--- Definindo um limite menor para facilitar a visualização da paginação
 
 export function ClientsList() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -63,12 +74,24 @@ export function ClientsList() {
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const { toast } = useToast();
 
-  const loadClients = async () => {
+  // ***** ESTADOS DE PAGINAÇÃO *****
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalClientsCount, setTotalClientsCount] = useState(0); // Para guardar o total retornado pela API
+  // ***** FIM DOS ESTADOS DE PAGINAÇÃO *****
+
+  // Modificada para aceitar parâmetros de paginação
+  const loadClients = async (
+    page: number = currentPage,
+    limit: number = CLIENTS_PER_PAGE
+  ) => {
     setIsLoading(true);
     try {
-      const response = await clientsAPI.getAll(); // Pega todos os clientes
+      const response = await clientsAPI.getAll(); // <--- Chamada sem argumentos
       setClients(response.clients || []);
-      setFilteredClients(response.clients || []);
+      setFilteredClients(response.clients || []); // Já filtrou pela API, então filteredClients é o mesmo aqui
+      setTotalPages(response.pagination.pages); // <--- Atualiza o total de páginas
+      setTotalClientsCount(response.pagination.total); // <--- Atualiza o total de clientes
     } catch (error) {
       console.error("Erro ao carregar clientes:", error);
       toast({ title: "Erro ao carregar clientes", variant: "destructive" });
@@ -78,9 +101,12 @@ export function ClientsList() {
   };
 
   useEffect(() => {
-    loadClients();
-  }, []);
+    loadClients(currentPage, CLIENTS_PER_PAGE); // Carrega a primeira página na montagem
+  }, [currentPage]); // Recarrega quando a página atual muda
+
   useEffect(() => {
+    // A filtragem local pelo searchTerm agora age sobre os clientes da PÁGINA ATUAL
+    // Para filtrar em toda a base, precisaríamos de uma API de busca mais complexa
     const filtered = clients.filter(
       (c) =>
         c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -109,10 +135,8 @@ export function ClientsList() {
       name: formData.get("name") as string,
       phone: formData.get("phone") as string,
       email: formData.get("email") as string,
-      // ***** NOVOS CAMPOS AQUI *****
-      entry_date: formData.get("entry_date") as string, // Captura a data de entrada
-      first_purchase_date: formData.get("first_purchase_date") as string, // Captura a data da primeira compra
-      // ***** FIM DOS NOVOS CAMPOS *****
+      entry_date: formData.get("entry_date") as string,
+      first_purchase_date: formData.get("first_purchase_date") as string,
       last_purchase: formData.get("last_purchase") as string,
       doctor: formData.get("doctor") as string,
       specialty: formData.get("specialty") as string,
@@ -125,14 +149,15 @@ export function ClientsList() {
         await clientsAPI.update(selectedClient.id, clientData);
         toast({ title: "Cliente atualizado" });
       } else {
-        await clientsAPI.create(clientData as any); // O tipo any é necessário aqui porque o clientData não tem entry_date e first_purchase_date que são required na interface do Client no apiClient.ts. Iremos corrigir isso no apiClient.ts no próximo passo.
+        await clientsAPI.create(clientData as any);
         toast({ title: "Cliente criado" });
       }
-      await loadClients();
+      setCurrentPage(1); // Volta para a primeira página ao criar/atualizar
+      await loadClients(1, CLIENTS_PER_PAGE); // Recarrega a primeira página
       setIsFormDialogOpen(false);
       setSelectedClient(null);
     } catch (error) {
-      console.error("Erro ao salvar cliente:", error); // Adicionado log detalhado do erro
+      console.error("Erro ao salvar cliente:", error);
       toast({
         title: "Erro ao salvar cliente",
         description:
@@ -157,7 +182,7 @@ export function ClientsList() {
     try {
       await clientsAPI.addPurchase(selectedClient.id, { value });
       toast({ title: "Compra adicionada com sucesso!" });
-      await loadClients();
+      await loadClients(currentPage, CLIENTS_PER_PAGE); // Recarrega a página atual
       setIsPurchaseDialogOpen(false);
       setSelectedClient(null);
     } catch (error) {
@@ -188,6 +213,23 @@ export function ClientsList() {
     return "";
   };
 
+  // Gerar array de números de página para os controles de paginação
+  const getPageNumbers = () => {
+    const pageNumbers = [];
+    const maxPagesToShow = 5; // Limite de botões de página para exibir
+    let startPage = Math.max(1, currentPage - Math.floor(maxPagesToShow / 2));
+    let endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
+
+    if (endPage - startPage + 1 < maxPagesToShow) {
+      startPage = Math.max(1, endPage - maxPagesToShow + 1);
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+      pageNumbers.push(i);
+    }
+    return pageNumbers;
+  };
+
   return (
     <div className="w-full space-y-6">
       <div className="flex items-center justify-between">
@@ -215,7 +257,10 @@ export function ClientsList() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Lista de Clientes</CardTitle>
+          <CardTitle>
+            Lista de Clientes ({totalClientsCount} no total)
+          </CardTitle>{" "}
+          {/* <--- Exibindo o total de clientes */}
           <CardDescription>
             Visualize e gerencie todos os clientes cadastrados
           </CardDescription>
@@ -336,8 +381,84 @@ export function ClientsList() {
                   </TableRow>
                 ))
               )}
+              {filteredClients.length === 0 && !isLoading && (
+                <TableRow>
+                  <TableCell
+                    colSpan={5}
+                    className="h-24 text-center text-muted-foreground"
+                  >
+                    Nenhum cliente encontrado.
+                  </TableCell>
+                </TableRow>
+              )}
             </TableBody>
           </Table>
+
+          {/* ***** CONTROLES DE PAGINAÇÃO ***** */}
+          {totalPages > 1 && ( // Exibe paginação apenas se houver mais de uma página
+            <Pagination className="mt-6">
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious
+                    onClick={() =>
+                      setCurrentPage((prev) => Math.max(1, prev - 1))
+                    }
+                    aria-disabled={currentPage === 1}
+                    tabIndex={currentPage === 1 ? -1 : 0}
+                    className={
+                      currentPage === 1 ? "pointer-events-none opacity-50" : ""
+                    }
+                  />
+                </PaginationItem>
+                {getPageNumbers().map((pageNumber) => (
+                  <PaginationItem key={pageNumber}>
+                    <PaginationLink
+                      onClick={() => setCurrentPage(pageNumber)}
+                      isActive={pageNumber === currentPage}
+                    >
+                      {pageNumber}
+                    </PaginationLink>
+                  </PaginationItem>
+                ))}
+                {totalPages > 5 &&
+                  currentPage < totalPages - 2 && ( // Exibir elipsis se houver muitas páginas e não estiver perto do fim
+                    <PaginationItem>
+                      <PaginationEllipsis />
+                    </PaginationItem>
+                  )}
+                {totalPages > 5 &&
+                  currentPage < totalPages - 2 && ( // Exibir última página se houver muitas e não for a última
+                    <PaginationItem>
+                      <PaginationLink
+                        onClick={() => setCurrentPage(totalPages)}
+                        isActive={totalPages === currentPage}
+                      >
+                        {totalPages}
+                      </PaginationLink>
+                    </PaginationItem>
+                  )}
+                <PaginationItem>
+                  <PaginationNext
+                    onClick={() => {
+                      if (currentPage < totalPages) {
+                        setCurrentPage((prev) =>
+                          Math.min(totalPages, prev + 1)
+                        );
+                      }
+                    }}
+                    aria-disabled={currentPage === totalPages}
+                    tabIndex={currentPage === totalPages ? -1 : 0}
+                    className={
+                      currentPage === totalPages
+                        ? "pointer-events-none opacity-50"
+                        : ""
+                    }
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          )}
+          {/* ***** FIM DOS CONTROLES DE PAGINAÇÃO ***** */}
         </CardContent>
       </Card>
 
@@ -381,7 +502,6 @@ export function ClientsList() {
                 required
               />
             </div>
-            {/* ***** NOVOS CAMPOS DE DATA AQUI ***** */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="entry_date">Data de Entrada</Label>
@@ -389,7 +509,6 @@ export function ClientsList() {
                   id="entry_date"
                   name="entry_date"
                   type="date"
-                  // Se editando, use a data existente; caso contrário, a data atual
                   defaultValue={
                     selectedClient?.entry_date
                       ? new Date(selectedClient.entry_date)
@@ -406,7 +525,6 @@ export function ClientsList() {
                   id="first_purchase_date"
                   name="first_purchase_date"
                   type="date"
-                  // Se editando, use a data existente; caso contrário, a data atual
                   defaultValue={
                     selectedClient?.first_purchase_date
                       ? new Date(selectedClient.first_purchase_date)
@@ -418,7 +536,6 @@ export function ClientsList() {
                 />
               </div>
             </div>
-            {/* ***** FIM DOS NOVOS CAMPOS DE DATA ***** */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="last_purchase">Última Compra</Label>
