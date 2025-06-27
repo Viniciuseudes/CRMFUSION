@@ -483,7 +483,7 @@ router.get("/mrr-analysis", async (req, res, next) => {
     }
 
     query += `
-      GROUP BY month
+      GROUP BY date_trunc('month', c.first_purchase_date)
       ORDER BY month ASC
     `;
 
