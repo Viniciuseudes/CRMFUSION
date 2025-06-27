@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useAuth } from "@/contexts/auth-context"; //
+import { useAuth } from "@/contexts/auth-context";
 import { reportsAPI } from "@/lib/api-client";
 import {
   Card,
@@ -10,16 +10,16 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card"; //
-import { Button } from "@/components/ui/button"; //
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"; //
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select"; //
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -27,15 +27,15 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table"; //
+} from "@/components/ui/table";
 import {
   RefreshCw,
   Users,
   DollarSign,
-  Clock, // Ícone para LTV/MRR
+  Clock,
   Loader2,
-  PieChartIcon, // Novo ícone para gráficos de pizza
-  LineChartIcon, // Novo ícone para gráficos de linha
+  PieChartIcon,
+  LineChartIcon,
 } from "lucide-react";
 import {
   BarChart,
@@ -51,24 +51,23 @@ import {
   Legend,
   LineChart,
   Line,
-} from "recharts"; //
+} from "recharts";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 const COLORS = [
-  "#3b82f6", // Blue
-  "#10b981", // Green
-  "#f59e0b", // Amber
-  "#8b5cf6", // Purple
-  "#ef4444", // Red
-  "#ec4899", // Pink
-  "#6b7280", // Gray
-  "#22d3ee", // Cyan
-  "#f97316", // Orange
+  "#3b82f6",
+  "#10b981",
+  "#f59e0b",
+  "#8b5cf6",
+  "#ef4444",
+  "#ec4899",
+  "#6b7280",
+  "#22d3ee",
+  "#f97316",
 ];
 
 export function ClientAnalyticsDashboard() {
-  const { user } = useAuth();
   const [period, setPeriod] = useState("all"); // 'all', '90', '180', '365'
   const [isLoading, setIsLoading] = useState(true);
 
@@ -80,15 +79,19 @@ export function ClientAnalyticsDashboard() {
   const fetchClientReports = useCallback(async (currentPeriod: string) => {
     setIsLoading(true);
     try {
+      // Determine the 'months' parameter for MRR based on the selected period
+      let mrrMonths: string;
+      if (currentPeriod === "all") {
+        mrrMonths = "12"; // Default to 12 months for 'all'
+      } else {
+        // Convert days to months, rounding up to ensure full periods are covered
+        mrrMonths = Math.ceil(Number(currentPeriod) / 30).toString();
+      }
+
       const promises = [
         reportsAPI.getClientSpecialtyAnalysis({ period: currentPeriod }),
         reportsAPI.getLtvAnalysis({ period: currentPeriod }),
-        reportsAPI.getMrrAnalysis({
-          months:
-            currentPeriod === "all"
-              ? "12"
-              : (Number(currentPeriod) / 30).toFixed(0),
-        }), // MRR por meses
+        reportsAPI.getMrrAnalysis({ months: mrrMonths }), // Pass calculated months
       ];
 
       const [specialtyRes, ltvRes, mrrRes] = await Promise.all(promises);
@@ -338,7 +341,6 @@ export function ClientAnalyticsDashboard() {
             </CardHeader>
             <CardContent className="pl-2">
               <ResponsiveContainer width="100%" height={300}>
-                {/* INÍCIO DA CORREÇÃO */}
                 <LineChart data={mrrData?.monthlyRevenue || []}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis
@@ -374,7 +376,6 @@ export function ClientAnalyticsDashboard() {
                     name="Receita Mensal"
                   />
                 </LineChart>
-                {/* FIM DA CORREÇÃO */}
               </ResponsiveContainer>
             </CardContent>
           </Card>
