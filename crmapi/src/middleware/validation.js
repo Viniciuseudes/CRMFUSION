@@ -15,7 +15,7 @@ const validateRequest = (schema) => {
 
 // Schemas de validação
 const schemas = {
-  // Auth schemas
+  // Auth schemas (sem mudanças)
   login: Joi.object({
     email: Joi.string().email().required().messages({
       "string.email": "Email deve ter um formato válido",
@@ -39,7 +39,7 @@ const schemas = {
     permissions: Joi.array().items(Joi.string()).default([]),
   }),
 
-  // User schemas
+  // User schemas (sem mudanças)
   updateUser: Joi.object({
     name: Joi.string().min(2).max(255),
     email: Joi.string().email(),
@@ -48,7 +48,7 @@ const schemas = {
     is_active: Joi.boolean(),
   }),
 
-  // Lead schemas
+  // Lead schemas (sem mudanças)
   createLead: Joi.object({
     name: Joi.string().min(2).max(255).required(),
     specialty: Joi.string().min(2).max(255).required(),
@@ -75,13 +75,13 @@ const schemas = {
     source: Joi.string().valid("whatsapp", "instagram", "google", "indicacao", "plataforma", "site"),
   }),
 
-  // Client schemas
+  // Client schemas (sem mudanças)
   createClient: Joi.object({
     name: Joi.string().min(2).max(255).required(),
     phone: Joi.string().min(10).max(20).required(),
     email: Joi.string().email().required(),
-    entry_date: Joi.date().default(new Date()), // <--- NOVO CAMPO
-    first_purchase_date: Joi.date().required(), // <--- NOVO CAMPO
+    entry_date: Joi.date().default(new Date()),
+    first_purchase_date: Joi.date().required(),
     last_purchase: Joi.date().required(),
     doctor: Joi.string().max(255).allow(null, ''),
     specialty: Joi.string().min(2).max(255).required(),
@@ -93,8 +93,8 @@ const schemas = {
     name: Joi.string().min(2).max(255),
     phone: Joi.string().min(10).max(20),
     email: Joi.string().email(),
-    entry_date: Joi.date(), // <--- NOVO CAMPO
-    first_purchase_date: Joi.date(), // <--- NOVO CAMPO
+    entry_date: Joi.date(),
+    first_purchase_date: Joi.date(),
     last_purchase: Joi.date(),
     doctor: Joi.string().max(255).allow(null, ''),
     specialty: Joi.string().min(2).max(255),
@@ -118,6 +118,7 @@ const schemas = {
     assigned_to: Joi.string().uuid().allow(null),
     start_date: Joi.date().required(),
     end_date: Joi.date().greater(Joi.ref("start_date")).required(),
+    is_active: Joi.boolean().default(true), // <--- MUDANÇA AQUI: Permite is_active na criação
   }),
 
   updateGoal: Joi.object({
@@ -133,7 +134,7 @@ const schemas = {
     is_active: Joi.boolean(),
   }),
 
-  // Activity schemas
+  // Activity schemas (sem mudanças)
   createActivity: Joi.object({
     lead_id: Joi.number().integer().allow(null),
     client_id: Joi.number().integer().allow(null),
@@ -145,7 +146,7 @@ const schemas = {
     metadata: Joi.object().default({}),
   }),
 
-  // Schema para a conversão de lead em cliente
+  // Schema para a conversão de lead em cliente (sem mudanças)
   convertLead: Joi.object({
     saleValue: Joi.number().min(0).required().messages({
       "any.required": "O valor da venda é obrigatório",
