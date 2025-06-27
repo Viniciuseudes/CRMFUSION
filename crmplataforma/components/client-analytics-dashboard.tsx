@@ -79,28 +79,43 @@ export function ClientAnalyticsDashboard() {
   const fetchClientReports = useCallback(async (currentPeriod: string) => {
     setIsLoading(true);
     try {
-      // Determine the 'months' parameter for MRR based on the selected period
-      let mrrMonths: string;
-      if (currentPeriod === "all") {
-        mrrMonths = "12"; // Default to 12 months for 'all'
-      } else {
-        // Convert days to months, rounding up to ensure full periods are covered
-        mrrMonths = Math.ceil(Number(currentPeriod) / 30).toString();
-      }
+      let mrrMonths =
+        currentPeriod === "all"
+          ? "12"
+          : Math.ceil(Number(currentPeriod) / 30).toString();
 
-      const promises = [
+      // --- MELHORIA APLICADA AQUI ---
+      // Use Promise.allSettled para lidar com falhas individuais
+      const results = await Promise.allSettled([
         reportsAPI.getClientSpecialtyAnalysis({ period: currentPeriod }),
         reportsAPI.getLtvAnalysis({ period: currentPeriod }),
-        reportsAPI.getMrrAnalysis({ months: mrrMonths }), // Pass calculated months
-      ];
+        reportsAPI.getMrrAnalysis({ months: mrrMonths }),
+      ]);
 
-      const [specialtyRes, ltvRes, mrrRes] = await Promise.all(promises);
+      // Verifique o status de cada promessa
+      if (results[0].status === "fulfilled") {
+        setSpecialtyData(results[0].value || []);
+      } else {
+        console.error(
+          "Erro ao buscar análise de especialidade:",
+          results[0].reason
+        );
+      }
 
-      setSpecialtyData(specialtyRes || []);
-      setLtvData(ltvRes);
-      setMrrData(mrrRes);
+      if (results[1].status === "fulfilled") {
+        setLtvData(results[1].value);
+      } else {
+        console.error("Erro ao buscar análise de LTV:", results[1].reason);
+      }
+
+      if (results[2].status === "fulfilled") {
+        setMrrData(results[2].value);
+      } else {
+        console.error("Erro ao buscar análise de MRR:", results[2].reason);
+      }
+      // --- FIM DA MELHORIA ---
     } catch (error) {
-      console.error("Erro ao carregar relatórios de clientes:", error);
+      console.error("Erro geral ao carregar relatórios de clientes:", error);
     } finally {
       setIsLoading(false);
     }
