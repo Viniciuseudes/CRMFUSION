@@ -45,6 +45,7 @@ CREATE TABLE leads (
     assigned_to UUID REFERENCES users(id),
     is_converted_client BOOLEAN DEFAULT FALSE,
     client_id INTEGER REFERENCES clients(id) ON DELETE SET NULL,
+    is_standby BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -105,6 +106,7 @@ CREATE INDEX idx_leads_funnel_stage ON leads(funnel, stage);
 CREATE INDEX idx_leads_source ON leads(source);
 CREATE INDEX idx_leads_assigned_to ON leads(assigned_to);
 CREATE INDEX idx_leads_created_at ON leads(created_at);
+CREATE INDEX idx_leads_is_standby ON leads(is_standby);
 CREATE INDEX idx_clients_status ON clients(status);
 CREATE INDEX idx_clients_assigned_to ON clients(assigned_to);
 CREATE INDEX idx_clients_entry_date ON clients(entry_date); -- <--- NOVO ÍNDICE

@@ -8,7 +8,8 @@ const router = express.Router()
 // Listar leads
 router.get("/", async (req, res, next) => {
   try {
-    const { funnel, source, specialty, page = 1, limit = 50 } = req.query
+    // Adicionado 'standby' aos parâmetros de query
+    const { funnel, source, specialty, standby, page = 1, limit = 50 } = req.query
     const offset = (page - 1) * limit
 
     let query = `
@@ -20,7 +21,14 @@ router.get("/", async (req, res, next) => {
     const params = []
     let paramCount = 0
 
-    // Filtros baseados em permissões - CORRIGIDO
+    // Filtro para o status de stand-by
+    if (standby === 'true') {
+      query += ` AND l.is_standby = TRUE`
+    } else {
+      query += ` AND l.is_standby = FALSE`
+    }
+
+    // Filtros baseados em permissões
     if (req.user.role !== "admin") {
       query += ` AND (l.assigned_to = $${++paramCount} OR l.funnel::text = ANY($${++paramCount}))`
       params.push(req.user.id, req.user.permissions)
@@ -42,16 +50,23 @@ router.get("/", async (req, res, next) => {
       query += ` AND l.specialty ILIKE $${paramCount}`
       params.push(`%${specialty}%`)
     }
-
-    query += ` ORDER BY l.created_at DESC LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}`
+    
+    query += ` ORDER BY l.updated_at DESC LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}`
     params.push(limit, offset)
 
     const result = await pool.query(query, params)
 
-    // Contar total - CORRIGIDO
+    // Contagem total
     let countQuery = "SELECT COUNT(*) FROM leads l WHERE 1=1"
     const countParams = []
     let countParamCount = 0
+
+    if (standby === 'true') {
+        countQuery += ` AND l.is_standby = TRUE`
+    } else {
+        countQuery += ` AND l.is_standby = FALSE`
+    }
+
 
     if (req.user.role !== "admin") {
       countQuery += ` AND (l.assigned_to = $${++countParamCount} OR l.funnel::text = ANY($${++countParamCount}))`
@@ -91,7 +106,7 @@ router.get("/", async (req, res, next) => {
   }
 })
 
-// Buscar lead por ID
+// Buscar lead por ID (mantido sem alterações)
 router.get("/:id", async (req, res, next) => {
   try {
     const { id } = req.params
@@ -104,7 +119,6 @@ router.get("/:id", async (req, res, next) => {
     const params = [id]
     let paramCount = 1
 
-    // Verificar permissões - CORRIGIDO
     if (req.user.role !== "admin") {
       query += ` AND (l.assigned_to = $${++paramCount} OR l.funnel::text = ANY($${++paramCount}))`
       params.push(req.user.id, req.user.permissions)
@@ -121,7 +135,7 @@ router.get("/:id", async (req, res, next) => {
   }
 })
 
-// Criar lead
+// Criar lead (mantido sem alterações)
 router.post("/", validateRequest(schemas.createLead), async (req, res, next) => {
   try {
     const leadData = {
@@ -166,7 +180,7 @@ router.post("/", validateRequest(schemas.createLead), async (req, res, next) => 
   }
 })
 
-// Atualizar lead
+// Atualizar lead (mantido sem alterações)
 router.put("/:id", validateRequest(schemas.updateLead), async (req, res, next) => {
   try {
     const { id } = req.params
@@ -177,7 +191,6 @@ router.put("/:id", validateRequest(schemas.updateLead), async (req, res, next) =
     }
     const oldLead = existingLeadResult.rows[0];
 
-    // Checagem de permissão
     if (req.user.role !== "admin" && oldLead.assigned_to !== req.user.id && !req.user.permissions.includes(oldLead.funnel)) {
       return res.status(403).json({ error: "Permissão insuficiente" });
     }
@@ -212,10 +225,10 @@ router.put("/:id", validateRequest(schemas.updateLead), async (req, res, next) =
     const updatedLead = result.rows[0]
 
     if (req.body.stage && req.body.stage !== oldLead.stage) {
-      await pool.query(`INSERT INTO activities (lead_id, type, description, user_id) VALUES ($1, $2, $3, $4)`, [id, "stage_change", `Lead movido para ${req.body.stage}`, req.user.id])
+      await pool.query(`INSERT INTO activities (lead_id, type, description, user_id) VALUES ($1, 'stage_change', $2, $3)`, [id, `Lead movido para ${req.body.stage}`, req.user.id])
     }
     if (req.body.funnel && req.body.funnel !== oldLead.funnel) {
-      await pool.query(`INSERT INTO activities (lead_id, type, description, user_id) VALUES ($1, $2, $3, $4)`, [id, "funnel_change", `Lead movido para funil ${req.body.funnel}`, req.user.id])
+      await pool.query(`INSERT INTO activities (lead_id, type, description, user_id) VALUES ($1, 'funnel_change', $2, $3)`, [id, `Lead movido para funil ${req.body.funnel}`, req.user.id])
     }
 
     res.json(updatedLead)
@@ -224,7 +237,47 @@ router.put("/:id", validateRequest(schemas.updateLead), async (req, res, next) =
   }
 })
 
-// Deletar lead
+// === NOVA ROTA PARA ATUALIZAR STATUS STAND-BY ===
+router.put("/:id/standby", async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { standby } = req.body;
+
+    if (typeof standby !== 'boolean') {
+      return res.status(400).json({ error: "O campo 'standby' deve ser um valor booleano." });
+    }
+
+    const leadResult = await pool.query(
+      `
+      UPDATE leads
+      SET is_standby = $1, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $2
+      RETURNING *
+    `,
+      [standby, id]
+    );
+
+    if (leadResult.rows.length === 0) {
+      return res.status(404).json({ error: "Lead não encontrado." });
+    }
+
+    const activityDescription = standby 
+        ? `Lead movido para Stand-by.` 
+        : `Lead reativado do Stand-by.`;
+
+    await pool.query(
+        `INSERT INTO activities (lead_id, type, description, user_id) VALUES ($1, 'note', $2, $3)`,
+        [id, activityDescription, req.user.id]
+    );
+
+    res.json(leadResult.rows[0]);
+  } catch (error) {
+    next(error);
+  }
+});
+
+
+// Deletar lead (mantido sem alterações)
 router.delete("/:id", async (req, res, next) => {
   try {
     const { id } = req.params
@@ -246,7 +299,7 @@ router.delete("/:id", async (req, res, next) => {
   }
 })
 
-// Converter lead em cliente
+// Converter lead em cliente (mantido sem alterações)
 router.post("/:id/convert", validateRequest(schemas.convertLead), async (req, res, next) => {
   const client = await pool.connect()
   try {
@@ -266,7 +319,6 @@ router.post("/:id/convert", validateRequest(schemas.convertLead), async (req, re
         return res.status(403).json({ error: "Permissão insuficiente para converter este lead" });
     }
     
-    // 1. Criar o cliente
     const clientResult = await client.query(
       `
       INSERT INTO clients (name, phone, email, entry_date, first_purchase_date, last_purchase, doctor, specialty, status, total_spent, assigned_to)
@@ -277,9 +329,9 @@ router.post("/:id/convert", validateRequest(schemas.convertLead), async (req, re
         lead.name,
         lead.phone,
         lead.email,
-        conversionDate, // <--- ADICIONADO: entry_date (usando a data da conversão)
-        conversionDate, // <--- ADICIONADO: first_purchase_date (usando a data da conversão)
-        conversionDate, // last_purchase
+        conversionDate,
+        conversionDate,
+        conversionDate,
         lead.doctor || null,
         lead.specialty,
         "Ativo",
@@ -289,7 +341,6 @@ router.post("/:id/convert", validateRequest(schemas.convertLead), async (req, re
     )
     const newClient = clientResult.rows[0]
 
-    // 2. Atualizar o lead (em vez de deletar)
     const updatedLeadResult = await client.query(
       `
       UPDATE leads
@@ -312,26 +363,22 @@ router.post("/:id/convert", validateRequest(schemas.convertLead), async (req, re
 
     const updatedLead = updatedLeadResult.rows[0];
 
-    // 3. Registrar atividade de conversão
-    await client.query(`INSERT INTO activities (lead_id, client_id, type, description, user_id) VALUES ($1, $2, $3, $4, $5)`, 
+    await client.query(`INSERT INTO activities (lead_id, client_id, type, description, user_id) VALUES ($1, $2, 'conversion', $3, $4)`, 
     [
       lead.id, 
       newClient.id, 
-      "conversion", 
       `Lead ${lead.name} convertido em cliente com venda de R$ ${saleValue.toFixed(2)}. Funil: ${targetFunnel}, Estágio: ${targetStage}`,
       req.user.id
     ]);
-
-    // 4. Registrar as mudanças de funil e estágio do lead (agora que ele é "cliente convertido")
-    await client.query(`INSERT INTO activities (lead_id, type, description, user_id) VALUES ($1, $2, $3, $4)`, 
-    [lead.id, "funnel_change", `Lead ${lead.name} movido para funil ${targetFunnel} (convertido)`, req.user.id]);
     
-    await client.query(`INSERT INTO activities (lead_id, type, description, user_id) VALUES ($1, $2, $3, $4)`, 
-    [lead.id, "stage_change", `Lead ${lead.name} movido para estágio ${targetStage} (convertido)`, req.user.id]);
+    await client.query(`INSERT INTO activities (lead_id, type, description, user_id) VALUES ($1, 'funnel_change', $2, $3)`, 
+    [lead.id, `Lead ${lead.name} movido para funil ${targetFunnel} (convertido)`, req.user.id]);
+    
+    await client.query(`INSERT INTO activities (lead_id, type, description, user_id) VALUES ($1, 'stage_change', $2, $3)`, 
+    [lead.id, `Lead ${lead.name} movido para estágio ${targetStage} (convertido)`, req.user.id]);
 
     await client.query("COMMIT")
 
-    // Retorna o lead ATUALIZADO para o frontend (com is_converted_client e novo funil/estágio)
     res.json({ message: "Lead convertido e atualizado com sucesso", lead: updatedLead, client: newClient })
   } catch (error) {
     await client.query("ROLLBACK")
