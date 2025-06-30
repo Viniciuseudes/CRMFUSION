@@ -1,6 +1,12 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -20,6 +26,8 @@ import {
   MessageSquare,
   Clock,
   Loader2,
+  PauseCircle,
+  PlayCircle,
 } from "lucide-react";
 import {
   Dialog,
@@ -133,18 +141,23 @@ export function LeadsFunnel() {
   const { toast } = useToast();
   const { user: currentUser } = useAuth();
 
-  // NOVOS ESTADOS PARA A CONVERSÃO
   const [isConvertDialogOpen, setIsConvertDialogOpen] = useState(false);
   const [leadToConvert, setLeadToConvert] = useState<Lead | null>(null);
-  const [saleValue, setSaleValue] = useState<number | "">(""); // Valor da venda
+  const [saleValue, setSaleValue] = useState<number | "">("");
   const [conversionDate, setConversionDate] = useState<string>(
     new Date().toISOString().split("T")[0]
-  ); // Data da venda
+  );
 
   const fetchLeads = useCallback(async () => {
     setIsLoading(true);
     try {
-      const response = await leadsAPI.getAll();
+      const params: { standby?: boolean } = {};
+      if (selectedFunnel === "standby") {
+        params.standby = true;
+      } else {
+        params.standby = false;
+      }
+      const response = await leadsAPI.getAll(params);
       setLeads(response.leads || []);
     } catch (error) {
       console.error("Erro ao carregar leads:", error);
@@ -157,7 +170,7 @@ export function LeadsFunnel() {
     } finally {
       setIsLoading(false);
     }
-  }, [toast]);
+  }, [toast, selectedFunnel]);
 
   useEffect(() => {
     fetchLeads();
@@ -202,6 +215,26 @@ export function LeadsFunnel() {
     }
     setFilteredLeads(currentFilteredLeads);
   }, [leads, searchTerm, filters]);
+
+  const handleToggleStandby = async (lead: Lead) => {
+    const newStandbyState = !lead.is_standby;
+    const actionText = newStandbyState ? "movido para stand-by" : "reativado";
+
+    try {
+      await leadsAPI.setStandby(lead.id, newStandbyState);
+      toast({
+        title: `Lead ${actionText}!`,
+        description: `${lead.name} foi ${actionText}.`,
+      });
+      fetchLeads();
+    } catch (error) {
+      console.error(`Erro ao ${actionText} o lead:`, error);
+      toast({
+        title: "Erro na operação",
+        variant: "destructive",
+      });
+    }
+  };
 
   const clearFilters = () => {
     setSearchTerm("");
@@ -295,16 +328,13 @@ export function LeadsFunnel() {
       }
 
       const response = await leadsAPI.convert(leadToConvert.id, {
-        // <--- ATUALIZADO AQUI
         saleValue: Number(saleValue),
         targetFunnel: "ongoing",
         targetStage: ongoingFunnel.stages[0].id,
         conversionDate: conversionDate,
       });
 
-      // ATUALIZADO AQUI: Agora esperamos o lead atualizado e o cliente
       if (response.lead) {
-        // Atualiza o estado local de leads com o lead modificado
         setLeads((prevLeads) =>
           prevLeads.map((l) => (l.id === response.lead.id ? response.lead : l))
         );
@@ -313,12 +343,11 @@ export function LeadsFunnel() {
           description: `${response.lead.name} foi convertido em cliente e movido para o funil 'Ongoing'.`,
         });
       } else {
-        // Fallback caso a API não retorne o lead atualizado como esperado
         toast({
           title: "Lead convertido!",
           description: `${leadToConvert.name} foi convertido em cliente. Recarregando dados...`,
         });
-        fetchLeads(); // Recarrega tudo se o lead atualizado não vier na resposta
+        fetchLeads();
       }
 
       setIsConvertDialogOpen(false);
@@ -428,8 +457,13 @@ export function LeadsFunnel() {
 
   const getLeadsByFunnelAndStage = (funnelId: string, stageId: string) => {
     return filteredLeads.filter(
-      (lead) => lead.funnel === funnelId && lead.stage === stageId
+      (lead) =>
+        lead.funnel === funnelId && lead.stage === stageId && !lead.is_standby
     );
+  };
+
+  const getStandbyLeads = () => {
+    return filteredLeads.filter((lead) => lead.is_standby);
   };
 
   const currentFunnelData =
@@ -497,9 +531,7 @@ export function LeadsFunnel() {
 
   const formatWhatsAppLink = (phone: string) => {
     if (!phone) return "";
-    // Remove todos os caracteres que não são dígitos
     const justDigits = phone.replace(/\D/g, "");
-    // Assume 55 como código do país (Brasil) se não estiver presente
     if (justDigits.length > 11) {
       return `https://wa.me/${justDigits}`;
     }
@@ -826,40 +858,417 @@ export function LeadsFunnel() {
           >
             {funnel.title}
             <Badge variant="secondary" className="ml-2">
-              {filteredLeads.filter((l) => l.funnel === funnel.id).length}
+              {
+                leads.filter((l) => l.funnel === funnel.id && !l.is_standby)
+                  .length
+              }
             </Badge>
           </Button>
         ))}
+        <Button
+          key="standby"
+          variant={selectedFunnel === "standby" ? "default" : "outline"}
+          onClick={() => setSelectedFunnel("standby")}
+          className="whitespace-nowrap bg-amber-100 text-amber-800 border-amber-200 hover:bg-amber-200 data-[state=active]:bg-amber-500 data-[state=active]:text-white"
+        >
+          Stand-by
+          <Badge variant="secondary" className="ml-2">
+            {leads.filter((l) => l.is_standby).length}
+          </Badge>
+        </Button>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-3">
-        {currentFunnelData.stages.map((stage) => {
-          const stageLeads = getLeadsByFunnelAndStage(
-            currentFunnelData.id,
-            stage.id
-          );
-          const totalValue = stageLeads.reduce(
-            (sum, lead) => sum + (Number(lead.value) || 0),
-            0
-          );
-          return (
-            <Card key={stage.id}>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">
-                  {stage.title}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stageLeads.length}</div>
-                <p className="text-xs text-muted-foreground">
-                  R$ {totalValue.toLocaleString("pt-BR")} em oportunidades
-                </p>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
+      {selectedFunnel !== "standby" ? (
+        <>
+          <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-3">
+            {currentFunnelData.stages.map((stage) => {
+              const stageLeads = getLeadsByFunnelAndStage(
+                currentFunnelData.id,
+                stage.id
+              );
+              const totalValue = stageLeads.reduce(
+                (sum, lead) => sum + (Number(lead.value) || 0),
+                0
+              );
+              return (
+                <Card key={stage.id}>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium">
+                      {stage.title}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">
+                      {stageLeads.length}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      R$ {totalValue.toLocaleString("pt-BR")} em oportunidades
+                    </p>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
 
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {currentFunnelData.stages.map((stage, stageIndex) => {
+              const stageLeads = getLeadsByFunnelAndStage(
+                currentFunnelData.id,
+                stage.id
+              );
+              return (
+                <div
+                  key={stage.id}
+                  className={`p-1 rounded-lg ${stage.color.replace(
+                    "bg-",
+                    "border-"
+                  )}`}
+                >
+                  <div
+                    className={`p-3 rounded-t-md text-center font-medium ${stage.color}`}
+                  >
+                    {stage.title} ({stageLeads.length})
+                  </div>
+                  <div className="space-y-3 min-h-[400px] flex flex-col p-2 bg-muted/20 rounded-b-md">
+                    {stageLeads.length > 0 ? (
+                      stageLeads.map((lead) => (
+                        <Card
+                          key={lead.id}
+                          className={`hover:shadow-lg transition-shadow w-full bg-card ${
+                            lead.is_converted_client
+                              ? "border-green-400 border-2"
+                              : ""
+                          }`}
+                        >
+                          <CardContent className="p-3">
+                            <div className="flex items-start gap-3">
+                              <Avatar className="h-9 w-9">
+                                <AvatarImage
+                                  src={
+                                    lead.avatar ||
+                                    `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                                      lead.name
+                                    )}&background=random`
+                                  }
+                                />
+                                <AvatarFallback>
+                                  {lead.name
+                                    .split(" ")
+                                    .map((n) => n[0])
+                                    .join("")
+                                    .toUpperCase()}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className="flex-1 space-y-1.5">
+                                <div>
+                                  <h4 className="font-semibold text-sm">
+                                    {lead.name}
+                                  </h4>
+                                  <p className="text-xs text-muted-foreground">
+                                    {lead.specialty}
+                                  </p>
+                                </div>
+                                <div className="flex flex-wrap gap-1">
+                                  <Badge
+                                    className={`${getSourceColor(
+                                      lead.source
+                                    )} text-xs px-1.5 py-0.5`}
+                                    variant="secondary"
+                                  >
+                                    {getSourceLabel(lead.source)}
+                                  </Badge>
+                                  {(lead.tags || []).map((tag) => (
+                                    <Badge
+                                      key={tag}
+                                      variant="secondary"
+                                      className={`text-xs px-1.5 py-0.5 ${getTagColor(
+                                        tag
+                                      )}`}
+                                    >
+                                      {tag}
+                                    </Badge>
+                                  ))}
+                                  {lead.is_converted_client && (
+                                    <Badge
+                                      variant="default"
+                                      className="bg-green-500 hover:bg-green-600 text-white text-xs px-1.5 py-0.5"
+                                    >
+                                      Cliente Convertido
+                                    </Badge>
+                                  )}
+                                </div>
+                                <div className="space-y-0.5 text-xs text-muted-foreground">
+                                  <div className="flex items-center gap-1">
+                                    <Phone className="h-3 w-3" />
+                                    {lead.phone}
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <Mail className="h-3 w-3" />
+                                    {lead.email}
+                                  </div>
+                                  <div className="flex items-center justify-between pt-1">
+                                    <div className="flex items-center gap-1">
+                                      <Calendar className="h-3 w-3 text-sky-600" />
+                                      <span>
+                                        {new Date(
+                                          lead.entry_date
+                                        ).toLocaleDateString("pt-BR")}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                      <Clock className="h-3 w-3 text-amber-600" />
+                                      <TimeAgo date={lead.updated_at} />
+                                    </div>
+                                  </div>
+                                  {lead.value > 0 && (
+                                    <div className="text-sm pt-1 font-semibold text-green-600">
+                                      R$ {lead.value.toLocaleString("pt-BR")}
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="flex flex-wrap gap-1 pt-1.5">
+                                  <Button
+                                    asChild
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-6 text-xs px-2"
+                                  >
+                                    <a
+                                      href={formatWhatsAppLink(lead.phone)}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                    >
+                                      <MessageSquare className="h-3 w-3 mr-1" />{" "}
+                                      WhatsApp
+                                    </a>
+                                  </Button>
+                                  <Button
+                                    asChild
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-6 text-xs px-2"
+                                  >
+                                    <a href={`mailto:${lead.email}`}>
+                                      <Mail className="h-3 w-3 mr-1" /> Email
+                                    </a>
+                                  </Button>
+                                  {stageIndex > 0 && (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-6 text-xs px-2"
+                                      onClick={() => moveToPreviousStage(lead)}
+                                      disabled={lead.is_converted_client}
+                                    >
+                                      <ChevronLeft className="h-3 w-3" />
+                                    </Button>
+                                  )}
+                                  {stageIndex <
+                                    currentFunnelData.stages.length - 1 && (
+                                    <Button
+                                      size="sm"
+                                      variant="default"
+                                      className="h-6 text-xs px-2"
+                                      onClick={() => moveToNextStage(lead)}
+                                      disabled={lead.is_converted_client}
+                                    >
+                                      <ChevronRight className="h-3 w-3" />
+                                    </Button>
+                                  )}
+                                  <Button
+                                    size="sm"
+                                    variant="secondary"
+                                    className="h-6 text-xs px-2"
+                                    onClick={() => {
+                                      setSelectedLeadId(lead.id);
+                                      setMoveFunnelDialogOpen(true);
+                                    }}
+                                    disabled={lead.is_converted_client}
+                                  >
+                                    <MoveRight className="h-3 w-3 mr-1" /> Mover
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-6 text-xs px-2 text-amber-600 border-amber-300 hover:bg-amber-100"
+                                    onClick={() => handleToggleStandby(lead)}
+                                  >
+                                    <PauseCircle className="h-3 w-3 mr-1" />{" "}
+                                    Stand-by
+                                  </Button>
+                                  {currentFunnelData.id === "sales" &&
+                                    stage.id === "closing" && (
+                                      <Button
+                                        size="sm"
+                                        variant="default"
+                                        className="h-6 text-xs px-2 bg-green-500 hover:bg-green-600 text-white"
+                                        onClick={() =>
+                                          handleOpenConvertDialog(lead)
+                                        }
+                                        disabled={lead.is_converted_client}
+                                      >
+                                        <UserCheck className="h-3 w-3 mr-1" />
+                                        {lead.is_converted_client
+                                          ? "Convertido"
+                                          : "Converter"}
+                                      </Button>
+                                    )}
+                                </div>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))
+                    ) : (
+                      <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
+                        Nenhum lead neste estágio.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle>Leads em Stand-by</CardTitle>
+            <CardDescription>
+              Leads que estão aguardando resposta ou foram pausados manualmente.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {getStandbyLeads().length > 0 ? (
+              getStandbyLeads().map((lead) => (
+                <Card
+                  key={lead.id}
+                  className="hover:shadow-lg transition-shadow w-full bg-card border-amber-400 border-2"
+                >
+                  <CardContent className="p-3">
+                    <div className="flex items-start gap-3">
+                      <Avatar className="h-9 w-9">
+                        <AvatarImage
+                          src={
+                            lead.avatar ||
+                            `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                              lead.name
+                            )}&background=random`
+                          }
+                        />
+                        <AvatarFallback>
+                          {lead.name
+                            .split(" ")
+                            .map((n) => n[0])
+                            .join("")
+                            .toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 space-y-1.5">
+                        <div>
+                          <h4 className="font-semibold text-sm">{lead.name}</h4>
+                          <p className="text-xs text-muted-foreground">
+                            {lead.specialty}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          <Badge
+                            className={`${getSourceColor(
+                              lead.source
+                            )} text-xs px-1.5 py-0.5`}
+                            variant="secondary"
+                          >
+                            {getSourceLabel(lead.source)}
+                          </Badge>
+                          {(lead.tags || []).map((tag) => (
+                            <Badge
+                              key={tag}
+                              variant="secondary"
+                              className={`text-xs px-1.5 py-0.5 ${getTagColor(
+                                tag
+                              )}`}
+                            >
+                              {tag}
+                            </Badge>
+                          ))}
+                        </div>
+                        <div className="space-y-0.5 text-xs text-muted-foreground">
+                          <div className="flex items-center gap-1">
+                            <Phone className="h-3 w-3" />
+                            {lead.phone}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Mail className="h-3 w-3" />
+                            {lead.email}
+                          </div>
+                          <div className="flex items-center justify-between pt-1">
+                            <div className="flex items-center gap-1">
+                              <Calendar className="h-3 w-3 text-sky-600" />
+                              <span>
+                                {new Date(lead.entry_date).toLocaleDateString(
+                                  "pt-BR"
+                                )}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Clock className="h-3 w-3 text-amber-600" />
+                              <TimeAgo date={lead.updated_at} />
+                            </div>
+                          </div>
+                          {lead.value > 0 && (
+                            <div className="text-sm pt-1 font-semibold text-green-600">
+                              R$ {lead.value.toLocaleString("pt-BR")}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap gap-1 pt-1.5">
+                          <Button
+                            asChild
+                            size="sm"
+                            variant="outline"
+                            className="h-6 text-xs px-2"
+                          >
+                            <a
+                              href={formatWhatsAppLink(lead.phone)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              <MessageSquare className="h-3 w-3 mr-1" />{" "}
+                              WhatsApp
+                            </a>
+                          </Button>
+                          <Button
+                            asChild
+                            size="sm"
+                            variant="outline"
+                            className="h-6 text-xs px-2"
+                          >
+                            <a href={`mailto:${lead.email}`}>
+                              <Mail className="h-3 w-3 mr-1" /> Email
+                            </a>
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="default"
+                            className="h-6 text-xs px-2 bg-green-500 hover:bg-green-600"
+                            onClick={() => handleToggleStandby(lead)}
+                          >
+                            <PlayCircle className="h-3 w-3 mr-1" /> Reativar
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))
+            ) : (
+              <p className="col-span-full text-center text-muted-foreground py-8">
+                Nenhum lead em stand-by.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
       <Dialog
         open={moveFunnelDialogOpen}
         onOpenChange={setMoveFunnelDialogOpen}

@@ -43,21 +43,18 @@ apiClient.interceptors.response.use(
 )
 
 // --- TIPOS DE DADOS ---
-// Estes tipos devem refletir os dados retornados pela API do backend,
-// incluindo quaisquer campos de junções (como assigned_to_name).
-
 export interface User {
-  id: string; // UUID do backend
+  id: string; 
   name: string;
   email: string;
   role: "admin" | "gerente" | "colaborador";
   permissions: string[];
   is_active: boolean;
   created_at: string;
-  updated_at?: string; // Adicionado como opcional
-  last_login?: string; // Adicionado como opcional
-  avatar_url?: string; // Adicionado como opcional
-  avatar?: string; // Para consistência com o frontend, se usado
+  updated_at?: string; 
+  last_login?: string;
+  avatar_url?: string;
+  avatar?: string; 
 }
 
 export interface Lead {
@@ -68,18 +65,19 @@ export interface Lead {
   email: string;
   funnel: string;
   stage: string;
-  entry_date: string; // Backend usa 'entry_date'
+  entry_date: string; 
   tags: string[];
   avatar?: string;
   value: number;
   notes?: string;
   source: "whatsapp" | "instagram" | "google" | "indicacao" | "plataforma" | "site";
-  assigned_to?: string; // UUID do usuário
+  assigned_to?: string; 
   is_converted_client?: boolean;
   client_id?: number;
+  is_standby?: boolean; // <<< PROPRIEDADE ADICIONADA
   created_at: string;
   updated_at: string;
-  assigned_to_name?: string; // Nome do usuário atribuído (via JOIN no backend)
+  assigned_to_name?: string; 
 }
 
 export interface Client {
@@ -87,22 +85,22 @@ export interface Client {
   name: string;
   phone: string;
   email: string;
-  entry_date: string; // <--- NOVA PROPRIEDADE
-  first_purchase_date: string; // <--- NOVA PROPRIEDADE
+  entry_date: string;
+  first_purchase_date: string;
   last_purchase: string;
   doctor: string;
   specialty: string;
   status: "Ativo" | "Inativo";
   avatar?: string;
   total_spent: number;
-  assigned_to?: string; // UUID do usuário
+  assigned_to?: string;
   created_at: string;
   updated_at: string;
-  assigned_to_name?: string; // Nome do usuário atribuído (via JOIN no backend)
+  assigned_to_name?: string; 
 }
 
 export interface Goal {
-  id: string; // UUID do backend
+  id: string; 
   title: string;
   description: string;
   type: "leads" | "conversions" | "revenue" | "pipeline_time";
@@ -110,13 +108,13 @@ export interface Goal {
   period: "daily" | "weekly" | "monthly" | "quarterly";
   funnel?: string;
   source?: string;
-  assigned_to?: string; // UUID do usuário
+  assigned_to?: string; 
   start_date: string;
   end_date: string;
   is_active: boolean;
   created_at: string;
   updated_at: string;
-  assigned_to_name?: string; // Nome do usuário atribuído (via JOIN no backend)
+  assigned_to_name?: string; 
 }
 
 export interface Activity {
@@ -125,14 +123,13 @@ export interface Activity {
   client_id?: number;
   type: "call" | "email" | "meeting" | "note" | "conversion" | "stage_change" | "funnel_change";
   description: string;
-  date: string; // No backend, é TIMESTAMP. String é apropriado para o frontend.
-  user_id: string; // UUID do usuário
+  date: string;
+  user_id: string;
   created_at: string;
-  // Campos que podem vir de junções no backend
   user_name?: string;
   lead_name?: string;
   client_name?: string;
-  metadata?: Record<string, any>; // Se sua API enviar metadados
+  metadata?: Record<string, any>;
 }
 
 // --- INTERFACES PARA RESPOSTAS PAGINADAS ---
@@ -236,12 +233,13 @@ export const usersAPI = {
 };
 
 // Leads
-type CreateLeadData = Omit<Lead, "id" | "created_at" | "updated_at" | "assigned_to" | "assigned_to_name" | "entry_date" | "is_converted_client" | "client_id">;
-type UpdateLeadData = Partial<Omit<Lead, "id" | "created_at" | "updated_at" | "assigned_to" | "assigned_to_name" | "entry_date" | "is_converted_client" | "client_id">>;
+type CreateLeadData = Omit<Lead, "id" | "created_at" | "updated_at" | "assigned_to" | "assigned_to_name" | "entry_date" | "is_converted_client" | "client_id" | "is_standby">;
+type UpdateLeadData = Partial<Omit<Lead, "id" | "created_at" | "updated_at" | "assigned_to" | "assigned_to_name" | "entry_date" | "is_converted_client" | "client_id" | "is_standby">>;
 
 export const leadsAPI = {
-  getAll: async (): Promise<PaginatedLeadsResponse> => {
-    const response = await apiClient.get("/leads");
+  // <<< FUNÇÃO MODIFICADA PARA ACEITAR PARÂMETROS >>>
+  getAll: async (params?: { funnel?: string; standby?: boolean }): Promise<PaginatedLeadsResponse> => {
+    const response = await apiClient.get("/leads", { params });
     return response.data;
   },
 
@@ -257,6 +255,12 @@ export const leadsAPI = {
 
   update: async (id: number, leadData: UpdateLeadData): Promise<Lead> => {
     const response = await apiClient.put(`/leads/${id}`, leadData);
+    return response.data;
+  },
+  
+  // <<< NOVA FUNÇÃO PARA ALTERAR O STATUS STAND-BY >>>
+  setStandby: async (id: number, standby: boolean): Promise<Lead> => {
+    const response = await apiClient.put(`/leads/${id}/standby`, { standby });
     return response.data;
   },
 
@@ -381,17 +385,17 @@ export const activitiesAPI = {
 // Reports
 export const reportsAPI = {
   getStats: async (p0: { period: string }): Promise<any> => {
-    const response = await apiClient.get("/reports/stats", { params: p0 }); // <--- Adicionado params
+    const response = await apiClient.get("/reports/stats", { params: p0 });
     return response.data;
   },
 
   getFunnelStats: async (p0: { period: string }): Promise<any> => {
-    const response = await apiClient.get("/reports/funnel-stats", { params: p0 }); // <--- Adicionado params
+    const response = await apiClient.get("/reports/funnel-stats", { params: p0 });
     return response.data;
   },
 
   getSourceStats: async (p0: { period: string }): Promise<any> => {
-    const response = await apiClient.get("/reports/source-stats", { params: p0 }); // <--- Adicionado params
+    const response = await apiClient.get("/reports/source-stats", { params: p0 });
     return response.data;
   },
 
@@ -401,7 +405,7 @@ export const reportsAPI = {
   },
 
   getUserPerformance: async (p0: { period: string }): Promise<any> => {
-    const response = await apiClient.get("/reports/user-performance", { params: p0 }); // <--- Adicionado params
+    const response = await apiClient.get("/reports/user-performance", { params: p0 });
     return response.data;
   },
 
@@ -415,7 +419,6 @@ export const reportsAPI = {
     return response.data;
   },
 
-  // ***** NOVAS FUNÇÕES PARA ANÁLISE DE CLIENTES *****
   getClientSpecialtyAnalysis: async (params?: { period?: string }): Promise<any> => {
     const response = await apiClient.get("/reports/client-specialty-analysis", { params });
     return response.data;
@@ -430,7 +433,6 @@ export const reportsAPI = {
     const response = await apiClient.get("/reports/mrr-analysis", { params });
     return response.data;
   },
-  // ***** FIM DAS NOVAS FUNÇÕES PARA ANÁLISE DE CLIENTES *****
 
   exportData: async (): Promise<any> => {
     const response = await apiClient.get("/reports/export");
