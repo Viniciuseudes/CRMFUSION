@@ -35,7 +35,7 @@ import {
   Loader2,
   PieChartIcon,
   LineChartIcon,
-  MapPin, // NOVO ÍCONE
+  MapPin,
 } from "lucide-react";
 import {
   BarChart,
@@ -75,7 +75,7 @@ export function ClientAnalyticsDashboard() {
   const [specialtyData, setSpecialtyData] = useState<any[]>([]);
   const [ltvData, setLtvData] = useState<any>(null);
   const [mrrData, setMrrData] = useState<any>(null);
-  const [clientsByState, setClientsByState] = useState<any[]>([]); // NOVO ESTADO
+  const [clientsByState, setClientsByState] = useState<any[]>([]);
 
   const fetchClientReports = useCallback(async (currentPeriod: string) => {
     setIsLoading(true);
@@ -89,7 +89,7 @@ export function ClientAnalyticsDashboard() {
         reportsAPI.getClientSpecialtyAnalysis({ period: currentPeriod }),
         reportsAPI.getLtvAnalysis({ period: currentPeriod }),
         reportsAPI.getMrrAnalysis({ months: mrrMonths }),
-        reportsAPI.getClientsByState(), // NOVA CHAMADA DE API
+        reportsAPI.getClientsByState(),
       ]);
 
       if (results[0].status === "fulfilled")
@@ -177,7 +177,7 @@ export function ClientAnalyticsDashboard() {
                   {ltvData?.totalClients?.toLocaleString() || "0"}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Clientes ativos neste período
+                  Clientes totais no período selecionado
                 </p>
               </CardContent>
             </Card>
@@ -244,7 +244,8 @@ export function ClientAnalyticsDashboard() {
                     }
                   />
                   <Tooltip
-                    formatter={(value) => [
+                    formatter={(value: number) => [
+                      // Corrigido para number
                       `R$ ${value.toLocaleString("pt-BR")}`,
                       "Receita Total",
                     ]}
@@ -289,7 +290,8 @@ export function ClientAnalyticsDashboard() {
                     ))}
                   </Pie>
                   <Tooltip
-                    formatter={(value, name, props) => [
+                    formatter={(value: number, name, props) => [
+                      // Corrigido para number
                       `${value} clientes`,
                       props.payload.specialty,
                     ]}
@@ -318,7 +320,8 @@ export function ClientAnalyticsDashboard() {
                     }
                   />
                   <Tooltip
-                    formatter={(value) => [
+                    formatter={(value: number) => [
+                      // Corrigido para number
                       `R$ ${value.toLocaleString("pt-BR")}`,
                       "Receita Total",
                     ]}
@@ -343,20 +346,21 @@ export function ClientAnalyticsDashboard() {
               </CardDescription>
             </CardHeader>
             <CardContent className="pl-2">
+              {/* --- INÍCIO DA CORREÇÃO DO GRÁFICO --- */}
               <ResponsiveContainer width="100%" height={400}>
                 <BarChart
                   data={clientsByState}
-                  layout="vertical"
-                  margin={{ left: 10 }}
+                  margin={{ top: 5, right: 20, left: 10, bottom: 5 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis type="number" allowDecimals={false} />
-                  <YAxis dataKey="state" type="category" width={40} />
-                  <Tooltip formatter={(value) => [value, "Clientes"]} />
+                  <XAxis dataKey="state" />
+                  <YAxis allowDecimals={false} />
+                  <Tooltip formatter={(value: number) => [value, "Clientes"]} />
                   <Legend />
-                  <Bar dataKey="clients" name="Nº de Clientes" fill="#f59e0b" />
+                  <Bar dataKey="clients" name="Nº de Clientes" fill="#8884d8" />
                 </BarChart>
               </ResponsiveContainer>
+              {/* --- FIM DA CORREÇÃO DO GRÁFICO --- */}
             </CardContent>
           </Card>
         </TabsContent>
@@ -391,7 +395,9 @@ export function ClientAnalyticsDashboard() {
                       `R$ ${value.toLocaleString("pt-BR")}`,
                       "Receita",
                     ]}
-                    labelFormatter={(label) =>
+                    labelFormatter={(
+                      label: string // Corrigido para string
+                    ) =>
                       format(parseISO(`${label}-01`), "MMMM de yyyy", {
                         locale: ptBR,
                       })
