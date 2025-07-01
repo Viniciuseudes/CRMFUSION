@@ -7,7 +7,8 @@ const router = express.Router()
 // Listar clientes - REMOVIDA A RESTRIÇÃO DE VISUALIZAÇÃO
 router.get("/", async (req, res, next) => {
   try {
-    const { status, specialty, page = 1, limit = 50 } = req.query;
+    // Adiciona 'searchTerm' à desestruturação dos query params
+    const { status, specialty, searchTerm, page = 1, limit = 10 } = req.query; // Ajustado limit para 10 para bater com o frontend
     const offset = (page - 1) * limit;
 
     let query = `
@@ -19,47 +20,53 @@ router.get("/", async (req, res, next) => {
     const params = [];
     let paramCount = 0;
 
-    // Filtros opcionais
+    // Filtros opcionais existentes
     if (status) {
-      paramCount++;
-      query += ` AND c.status = $${paramCount}`;
+      query += ` AND c.status = $${++paramCount}`;
       params.push(status);
     }
     if (specialty) {
-      paramCount++;
-      query += ` AND c.specialty ILIKE $${paramCount}`;
+      query += ` AND c.specialty ILIKE $${++paramCount}`;
       params.push(`%${specialty}%`);
     }
 
-    query += ` ORDER BY c.created_at DESC LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}`;
+    // --- NOVO FILTRO DE BUSCA ---
+    if (searchTerm) {
+      query += ` AND (c.name ILIKE $${++paramCount} OR c.email ILIKE $${paramCount} OR c.specialty ILIKE $${paramCount})`;
+      params.push(`%${searchTerm}%`);
+    }
+
+    query += ` ORDER BY c.created_at DESC LIMIT $${++paramCount} OFFSET $${++paramCount}`;
     params.push(limit, offset);
 
     const result = await pool.query(query, params);
 
-    // Contagem total
+    // --- A CONTAGEM TOTAL TAMBÉM PRECISA DO FILTRO DE BUSCA ---
     let countQuery = "SELECT COUNT(*) FROM clients c WHERE 1=1";
     const countParams = [];
     let countParamCount = 0;
 
     if (status) {
-      countParamCount++;
-      countQuery += ` AND c.status = $${countParamCount}`;
+      countQuery += ` AND c.status = $${++countParamCount}`;
       countParams.push(status);
     }
     if (specialty) {
-      countParamCount++;
-      countQuery += ` AND c.specialty ILIKE $${countParamCount}`;
+      countQuery += ` AND c.specialty ILIKE $${++countParamCount}`;
       countParams.push(`%${specialty}%`);
+    }
+    if (searchTerm) {
+      countQuery += ` AND (c.name ILIKE $${++countParamCount} OR c.email ILIKE $${countParamCount} OR c.specialty ILIKE $${countParamCount})`;
+      countParams.push(`%${searchTerm}%`);
     }
 
     const countResult = await pool.query(countQuery, countParams);
-    const total = Number.parseInt(countResult.rows[0].count);
+    const total = Number.parseInt(countResult.rows[0].count, 10);
 
     res.json({
       clients: result.rows,
       pagination: {
-        page: Number.parseInt(page),
-        limit: Number.parseInt(limit),
+        page: Number.parseInt(page, 10),
+        limit: Number.parseInt(limit, 10),
         total,
         pages: Math.ceil(total / limit),
       },
@@ -68,8 +75,6 @@ router.get("/", async (req, res, next) => {
     next(error);
   }
 });
-
-
 // Buscar cliente por ID - REMOVIDA A RESTRIÇÃO DE VISUALIZAÇÃO
 router.get("/:id", async (req, res, next) => {
   try {
