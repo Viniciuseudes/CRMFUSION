@@ -65,7 +65,8 @@ export interface Lead {
   email: string;
   funnel: string;
   stage: string;
-  entry_date: string; 
+  entry_date: string;
+  state?: string; 
   tags: string[];
   avatar?: string;
   value: number;
@@ -91,6 +92,7 @@ export interface Client {
   doctor: string;
   specialty: string;
   status: "Ativo" | "Inativo";
+  state?: string;
   avatar?: string;
   total_spent: number;
   assigned_to?: string;
@@ -431,6 +433,16 @@ export const reportsAPI = {
 
   getMrrAnalysis: async (params?: { months?: string }): Promise<any> => {
     const response = await apiClient.get("/reports/mrr-analysis", { params });
+    return response.data;
+  },
+
+    getClientsByState: async (): Promise<any[]> => {
+    const response = await apiClient.get("/reports/clients-by-state");
+    return response.data;
+  },
+
+  getLeadsByState: async (): Promise<any[]> => {
+    const response = await apiClient.get("/reports/leads-by-state");
     return response.data;
   },
 

@@ -36,6 +36,7 @@ import {
   Loader2,
   PieChartIcon,
   LineChartIcon,
+  MapPin, // NOVO ÍCONE
 } from "lucide-react";
 import {
   BarChart,
@@ -68,13 +69,14 @@ const COLORS = [
 ];
 
 export function ClientAnalyticsDashboard() {
-  const [period, setPeriod] = useState("all"); // 'all', '90', '180', '365'
+  const [period, setPeriod] = useState("all");
   const [isLoading, setIsLoading] = useState(true);
 
   // States para os dados dos relatórios
   const [specialtyData, setSpecialtyData] = useState<any[]>([]);
   const [ltvData, setLtvData] = useState<any>(null);
   const [mrrData, setMrrData] = useState<any>(null);
+  const [clientsByState, setClientsByState] = useState<any[]>([]); // NOVO ESTADO
 
   const fetchClientReports = useCallback(async (currentPeriod: string) => {
     setIsLoading(true);
@@ -84,36 +86,19 @@ export function ClientAnalyticsDashboard() {
           ? "12"
           : Math.ceil(Number(currentPeriod) / 30).toString();
 
-      // --- MELHORIA APLICADA AQUI ---
-      // Use Promise.allSettled para lidar com falhas individuais
       const results = await Promise.allSettled([
         reportsAPI.getClientSpecialtyAnalysis({ period: currentPeriod }),
         reportsAPI.getLtvAnalysis({ period: currentPeriod }),
         reportsAPI.getMrrAnalysis({ months: mrrMonths }),
+        reportsAPI.getClientsByState(), // NOVA CHAMADA DE API
       ]);
 
-      // Verifique o status de cada promessa
-      if (results[0].status === "fulfilled") {
+      if (results[0].status === "fulfilled")
         setSpecialtyData(results[0].value || []);
-      } else {
-        console.error(
-          "Erro ao buscar análise de especialidade:",
-          results[0].reason
-        );
-      }
-
-      if (results[1].status === "fulfilled") {
-        setLtvData(results[1].value);
-      } else {
-        console.error("Erro ao buscar análise de LTV:", results[1].reason);
-      }
-
-      if (results[2].status === "fulfilled") {
-        setMrrData(results[2].value);
-      } else {
-        console.error("Erro ao buscar análise de MRR:", results[2].reason);
-      }
-      // --- FIM DA MELHORIA ---
+      if (results[1].status === "fulfilled") setLtvData(results[1].value);
+      if (results[2].status === "fulfilled") setMrrData(results[2].value);
+      if (results[3].status === "fulfilled")
+        setClientsByState(results[3].value || []); // ATUALIZA O NOVO ESTADO
     } catch (error) {
       console.error("Erro geral ao carregar relatórios de clientes:", error);
     } finally {
@@ -170,9 +155,10 @@ export function ClientAnalyticsDashboard() {
       </div>
 
       <Tabs defaultValue="overview">
-        <TabsList className="grid w-full grid-cols-2 md:grid-cols-3">
+        <TabsList className="grid w-full grid-cols-2 md:grid-cols-4">
           <TabsTrigger value="overview">Métricas Chave</TabsTrigger>
           <TabsTrigger value="specialty">Por Especialidade</TabsTrigger>
+          <TabsTrigger value="location">Por Localização</TabsTrigger>
           <TabsTrigger value="revenue-trends">
             Receita e Recorrência
           </TabsTrigger>
@@ -340,6 +326,33 @@ export function ClientAnalyticsDashboard() {
                   />
                   <Legend />
                   <Bar dataKey="totalRevenue" fill={COLORS[1]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="location" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Clientes por Estado</CardTitle>
+              <CardDescription>
+                Distribuição geográfica dos seus clientes pelo Brasil.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="pl-2">
+              <ResponsiveContainer width="100%" height={400}>
+                <BarChart
+                  data={clientsByState}
+                  layout="vertical"
+                  margin={{ left: 20 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis type="number" allowDecimals={false} />
+                  <YAxis dataKey="state" type="category" width={60} />
+                  <Tooltip formatter={(value) => [value, "Clientes"]} />
+                  <Legend />
+                  <Bar dataKey="clients" name="Nº de Clientes" fill="#f59e0b" />
                 </BarChart>
               </ResponsiveContainer>
             </CardContent>

@@ -38,6 +38,7 @@ import {
   CheckCircle,
   Clock,
   Loader2,
+  MapPin,
 } from "lucide-react";
 import {
   BarChart,
@@ -77,16 +78,18 @@ export function ReportsDashboard() {
   const [sourceStats, setSourceStats] = useState<any>(null);
   const [userPerformance, setUserPerformance] = useState<any>(null);
   const [conversionsByMonth, setConversionsByMonth] = useState<any[]>([]);
+  const [leadsByState, setLeadsByState] = useState<any[]>([]);
 
   const fetchReports = useCallback(
     async (currentPeriod: string) => {
       setIsLoading(true);
       try {
-        const promises = [
+        const promises: Promise<any>[] = [
           reportsAPI.getStats({ period: currentPeriod }),
           reportsAPI.getFunnelStats({ period: currentPeriod }),
           reportsAPI.getSourceStats({ period: currentPeriod }),
           reportsAPI.getConversionsByMonth(),
+          reportsAPI.getLeadsByState(),
         ];
 
         if (user?.role === "admin") {
@@ -95,26 +98,27 @@ export function ReportsDashboard() {
           );
         }
 
-        const [
-          statsData,
-          funnelData,
-          sourceData,
-          conversionsData,
-          performanceData,
-        ] = await Promise.all(promises);
+        const results = await Promise.allSettled(promises);
 
-        setStats(statsData);
-        setFunnelStats(funnelData);
-        setSourceStats(sourceData);
-        setUserPerformance(performanceData);
-
-        const formattedConversions = Object.entries(conversionsData).map(
-          ([month, count]) => ({
-            month: format(parseISO(`${month}-01`), "MMM/yy", { locale: ptBR }),
-            conversões: count,
-          })
-        );
-        setConversionsByMonth(formattedConversions);
+        if (results[0].status === "fulfilled") setStats(results[0].value);
+        if (results[1].status === "fulfilled") setFunnelStats(results[1].value);
+        if (results[2].status === "fulfilled") setSourceStats(results[2].value);
+        if (results[3].status === "fulfilled") {
+          const formattedConversions = Object.entries(results[3].value).map(
+            ([month, count]) => ({
+              month: format(parseISO(`${month}-01`), "MMM/yy", {
+                locale: ptBR,
+              }),
+              conversões: count,
+            })
+          );
+          setConversionsByMonth(formattedConversions);
+        }
+        if (results[4].status === "fulfilled")
+          setLeadsByState(results[4].value);
+        if (user?.role === "admin" && results[5]?.status === "fulfilled") {
+          setUserPerformance(results[5].value);
+        }
       } catch (error) {
         console.error("Erro ao carregar relatórios:", error);
       } finally {
@@ -128,7 +132,6 @@ export function ReportsDashboard() {
     fetchReports(period);
   }, [period, fetchReports]);
 
-  // Helper para formatar dados para gráficos
   const funnelChartData = funnelStats
     ? Object.keys(funnelStats).map((key) => ({
         name: key.charAt(0).toUpperCase() + key.slice(1),
@@ -285,6 +288,30 @@ export function ReportsDashboard() {
                     strokeWidth={2}
                   />
                 </LineChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <MapPin className="mr-2 h-5 w-5" />
+                Leads por Estado
+              </CardTitle>
+              <CardDescription>
+                Distribuição dos leads ativos por estado.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={350}>
+                <BarChart data={leadsByState}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="state" />
+                  <YAxis allowDecimals={false} />
+                  <Tooltip formatter={(value) => [value, "Leads"]} />
+                  <Legend />
+                  <Bar dataKey="leads" fill="#8884d8" name="Leads" />
+                </BarChart>
               </ResponsiveContainer>
             </CardContent>
           </Card>
