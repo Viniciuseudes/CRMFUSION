@@ -119,18 +119,11 @@ export function ClientsList() {
     null
   );
 
-  // ========================== INÍCIO DA CORREÇÃO ==========================
-
-  // 1. A função `loadClients` agora aceita `page` e `limit` como argumentos obrigatórios.
-  // 2. O `useCallback` tem a dependência correta (`toast`), pois a função em si não depende diretamente de `currentPage`.
   const loadClients = useCallback(
     async (page: number, limit: number) => {
       setIsLoading(true);
       try {
-        // 3. A chamada à API agora passa os parâmetros de paginação.
-        //    Isso garante que o backend receba a página correta que deve ser carregada.
-        const response = await clientsAPI.getAll();
-
+        const response = await clientsAPI.getAll({ page, limit });
         setClients(response.clients || []);
         setFilteredClients(response.clients || []);
         setTotalPages(response.pagination.pages);
@@ -145,16 +138,12 @@ export function ClientsList() {
     [toast]
   );
 
-  // 4. O useEffect agora chama a função `loadClients` passando a página atual.
-  //    Quando `currentPage` muda (ao clicar em Next/Previous), este efeito é re-executado,
-  //    chamando `loadClients` com o novo número da página.
   useEffect(() => {
     loadClients(currentPage, CLIENTS_PER_PAGE);
   }, [currentPage, loadClients]);
 
-  // ========================== FIM DA CORREÇÃO ==========================
-
   useEffect(() => {
+    // Esta busca agora é feita em cima da página atual de clientes
     const filtered = clients.filter(
       (c) =>
         c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -384,7 +373,7 @@ export function ClientsList() {
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <Avatar className="h-10 w-10">
-                          <AvatarImage src={undefined} />
+                          <AvatarImage src={client.avatar_url} />
                           <AvatarFallback>
                             {client.name
                               .split(" ")
