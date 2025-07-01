@@ -15,6 +15,7 @@ const activityRoutes = require("./routes/activities")
 const reportRoutes = require("./routes/reports")
 const { errorHandler } = require("./middleware/errorHandler")
 const { authenticateToken } = require("./middleware/auth")
+const contractRoutes = require("./routes/contracts");
 
 const app = express()
 const PORT = process.env.PORT || 3001
@@ -68,6 +69,7 @@ app.use("/api/clients", authenticateToken, clientRoutes);
 app.use("/api/goals", authenticateToken, goalRoutes);
 app.use("/api/activities", authenticateToken, activityRoutes);
 app.use("/api/reports", authenticateToken, reportRoutes);
+app.use("/api/contracts", authenticateToken, contractRoutes);
 
 // Error handling
 app.use(errorHandler);

@@ -160,6 +160,18 @@ const schemas = {
     targetStage: Joi.string().max(100).required(),
     conversionDate: Joi.date().required(),
   }),
+
+  createContract: Joi.object({
+  client_id: Joi.number().integer().required(),
+  title: Joi.string().min(3).max(255).required(),
+  start_date: Joi.date().iso().required(),
+  end_date: Joi.date().iso().greater(Joi.ref("start_date")).required(),
+  monthly_value: Joi.number().min(0).required(),
+}),
+
+updateContractStatus: Joi.object({
+  status: Joi.string().valid('ativo', 'expirado', 'cancelado').required(),
+}),
 }
 
 module.exports = {
