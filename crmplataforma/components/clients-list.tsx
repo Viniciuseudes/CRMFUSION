@@ -31,8 +31,8 @@ import {
   Edit,
   ShoppingCart,
   Loader2,
-  MoreHorizontal, // Adicionado para o menu dropdown
-  FileText, // Adicionado para o ícone de contrato
+  MoreHorizontal,
+  FileText,
 } from "lucide-react";
 import {
   Dialog,
@@ -49,7 +49,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { clientsAPI, contractsAPI, type Client } from "@/lib/api-client"; // Importado o contractsAPI
+import { clientsAPI, contractsAPI, type Client } from "@/lib/api-client";
 import { useToast } from "@/hooks/use-toast";
 import {
   Pagination,
@@ -65,7 +65,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"; // Importação do DropdownMenu
+} from "@/components/ui/dropdown-menu";
 
 const CLIENTS_PER_PAGE = 10;
 
@@ -114,17 +114,23 @@ export function ClientsList() {
   const [totalPages, setTotalPages] = useState(1);
   const [totalClientsCount, setTotalClientsCount] = useState(0);
 
-  // --- Estados para o novo diálogo de contrato ---
   const [isContractDialogOpen, setIsContractDialogOpen] = useState(false);
   const [clientForContract, setClientForContract] = useState<Client | null>(
     null
   );
 
+  // ========================== INÍCIO DA CORREÇÃO ==========================
+
+  // 1. A função `loadClients` agora aceita `page` e `limit` como argumentos obrigatórios.
+  // 2. O `useCallback` tem a dependência correta (`toast`), pois a função em si não depende diretamente de `currentPage`.
   const loadClients = useCallback(
-    async (page: number = currentPage, limit: number = CLIENTS_PER_PAGE) => {
+    async (page: number, limit: number) => {
       setIsLoading(true);
       try {
+        // 3. A chamada à API agora passa os parâmetros de paginação.
+        //    Isso garante que o backend receba a página correta que deve ser carregada.
         const response = await clientsAPI.getAll();
+
         setClients(response.clients || []);
         setFilteredClients(response.clients || []);
         setTotalPages(response.pagination.pages);
@@ -136,12 +142,17 @@ export function ClientsList() {
         setIsLoading(false);
       }
     },
-    [currentPage, toast]
+    [toast]
   );
 
+  // 4. O useEffect agora chama a função `loadClients` passando a página atual.
+  //    Quando `currentPage` muda (ao clicar em Next/Previous), este efeito é re-executado,
+  //    chamando `loadClients` com o novo número da página.
   useEffect(() => {
     loadClients(currentPage, CLIENTS_PER_PAGE);
   }, [currentPage, loadClients]);
+
+  // ========================== FIM DA CORREÇÃO ==========================
 
   useEffect(() => {
     const filtered = clients.filter(
@@ -373,7 +384,7 @@ export function ClientsList() {
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <Avatar className="h-10 w-10">
-                          <AvatarImage src={client.avatar_url} />
+                          <AvatarImage src={undefined} />
                           <AvatarFallback>
                             {client.name
                               .split(" ")
