@@ -309,10 +309,10 @@ type CreateClientData = Omit<Client, "id" | "created_at" | "updated_at" | "assig
 type UpdateClientData = Partial<Omit<Client, "id" | "created_at" | "updated_at" | "assigned_to" | "assigned_to_name">>;
 
 export const clientsAPI = {
-  getAll: async (): Promise<PaginatedClientsResponse> => {
-    const response = await apiClient.get("/clients");
-    return response.data;
-  },
+getAll: async (params?: { page?: number; limit?: number; status?: string; specialty?: string }): Promise<PaginatedClientsResponse> => {
+  const response = await apiClient.get("/clients", { params });
+  return response.data;
+},
 
   getById: async (id: number): Promise<Client> => {
     const response = await apiClient.get(`/clients/${id}`);
