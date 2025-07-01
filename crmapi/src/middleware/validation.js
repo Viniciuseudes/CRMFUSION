@@ -60,6 +60,7 @@ const schemas = {
     value: Joi.number().min(0).default(0),
     notes: Joi.string().allow(""),
     source: Joi.string().valid("whatsapp", "instagram", "google", "indicacao", "plataforma", "site").required(),
+    state: Joi.string().length(2).allow(null, ''),
   }),
 
   updateLead: Joi.object({
@@ -73,6 +74,7 @@ const schemas = {
     value: Joi.number().min(0),
     notes: Joi.string().allow(""),
     source: Joi.string().valid("whatsapp", "instagram", "google", "indicacao", "plataforma", "site"),
+    state: Joi.string().length(2).allow(null, ''),
   }),
 
   // Client schemas (sem mudanças)
@@ -87,6 +89,7 @@ const schemas = {
     specialty: Joi.string().min(2).max(255).required(),
     status: Joi.string().valid("Ativo", "Inativo").default("Ativo"),
     total_spent: Joi.number().min(0).default(0),
+    state: Joi.string().length(2).allow(null, ''),
   }),
 
   updateClient: Joi.object({
@@ -100,6 +103,7 @@ const schemas = {
     specialty: Joi.string().min(2).max(255),
     status: Joi.string().valid("Ativo", "Inativo"),
     total_spent: Joi.number().min(0),
+    state: Joi.string().length(2).allow(null, ''),
   }),
 
   addPurchase: Joi.object({

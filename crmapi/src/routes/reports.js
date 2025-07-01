@@ -552,6 +552,39 @@ router.get("/export", async (req, res, next) => {
   } catch (error) {
     next(error)
   }
-})
+});
+
+// Leads por estado
+router.get("/leads-by-state", async (req, res, next) => {
+  try {
+    let query = `
+      SELECT 
+        state,
+        COUNT(id) as count
+      FROM leads 
+      WHERE state IS NOT NULL AND is_converted_client = FALSE AND is_standby = FALSE
+    `;
+    const params = [];
+    let paramCount = 0;
+
+    if (req.user.role !== "admin") {
+      paramCount++;
+      query += ` AND assigned_to = $${paramCount}`;
+      params.push(req.user.id);
+    }
+
+    query += ` GROUP BY state ORDER BY count DESC`;
+
+    const result = await pool.query(query, params);
+
+    res.json(result.rows.map(row => ({
+      state: row.state,
+      leads: Number.parseInt(row.count)
+    })));
+
+  } catch (error) {
+    next(error);
+  }
+});
 
 module.exports = router

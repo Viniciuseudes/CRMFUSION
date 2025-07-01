@@ -27,6 +27,26 @@ CREATE TABLE users (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Tabela de clientes
+CREATE TABLE clients (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    phone VARCHAR(50) NOT NULL,
+    email VARCHAR(255) NOT NULL,
+    entry_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    first_purchase_date DATE NOT NULL,
+    last_purchase DATE NOT NULL,
+    doctor VARCHAR(255),
+    specialty VARCHAR(255) NOT NULL,
+    status client_status DEFAULT 'Ativo',
+    state VARCHAR(2), -- <<< NOVA COLUNA AQUI
+    avatar_url TEXT,
+    total_spent DECIMAL(10,2) DEFAULT 0,
+    assigned_to UUID REFERENCES users(id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Tabela de leads
 CREATE TABLE leads (
     id SERIAL PRIMARY KEY,
@@ -37,6 +57,7 @@ CREATE TABLE leads (
     funnel lead_funnel NOT NULL DEFAULT 'marketing',
     stage VARCHAR(100) NOT NULL,
     entry_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    state VARCHAR(2), -- <<< NOVA COLUNA AQUI
     tags TEXT[] DEFAULT '{}',
     avatar_url TEXT,
     value DECIMAL(10,2) DEFAULT 0,
@@ -50,25 +71,6 @@ CREATE TABLE leads (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Tabela de clientes
-CREATE TABLE clients (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    phone VARCHAR(50) NOT NULL,
-    email VARCHAR(255) NOT NULL,
-    -- <--- NOVAS COLUNAS AQUI
-    entry_date DATE NOT NULL DEFAULT CURRENT_DATE,
-    first_purchase_date DATE NOT NULL,
-    last_purchase DATE NOT NULL,
-    doctor VARCHAR(255),
-    specialty VARCHAR(255) NOT NULL,
-    status client_status DEFAULT 'Ativo',
-    avatar_url TEXT,
-    total_spent DECIMAL(10,2) DEFAULT 0,
-    assigned_to UUID REFERENCES users(id),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
 
 -- Tabela de atividades
 CREATE TABLE activities (
@@ -109,7 +111,7 @@ CREATE INDEX idx_leads_created_at ON leads(created_at);
 CREATE INDEX idx_leads_is_standby ON leads(is_standby);
 CREATE INDEX idx_clients_status ON clients(status);
 CREATE INDEX idx_clients_assigned_to ON clients(assigned_to);
-CREATE INDEX idx_clients_entry_date ON clients(entry_date); -- <--- NOVO ÍNDICE
+CREATE INDEX idx_clients_entry_date ON clients(entry_date);
 CREATE INDEX idx_activities_lead_id ON activities(lead_id);
 CREATE INDEX idx_activities_client_id ON activities(client_id);
 CREATE INDEX idx_activities_user_id ON activities(user_id);

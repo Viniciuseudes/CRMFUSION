@@ -145,8 +145,8 @@ router.post("/", validateRequest(schemas.createLead), async (req, res, next) => 
 
     const result = await pool.query(
       `
-      INSERT INTO leads (name, specialty, phone, email, funnel, stage, tags, value, notes, source, assigned_to)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      INSERT INTO leads (name, specialty, phone, email, funnel, stage, tags, value, notes, source, assigned_to,state)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
       RETURNING *
     `,
       [
@@ -161,6 +161,7 @@ router.post("/", validateRequest(schemas.createLead), async (req, res, next) => 
         leadData.notes,
         leadData.source,
         leadData.assigned_to,
+        leadData.state,
       ]
     )
 
@@ -321,8 +322,8 @@ router.post("/:id/convert", validateRequest(schemas.convertLead), async (req, re
     
     const clientResult = await client.query(
       `
-      INSERT INTO clients (name, phone, email, entry_date, first_purchase_date, last_purchase, doctor, specialty, status, total_spent, assigned_to)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      INSERT INTO clients (name, phone, email, entry_date, first_purchase_date, last_purchase, doctor, specialty, status, total_spent, assigned_to,state)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
       RETURNING *
     `,
       [
@@ -336,7 +337,9 @@ router.post("/:id/convert", validateRequest(schemas.convertLead), async (req, re
         lead.specialty,
         "Ativo",
         saleValue,
-        lead.assigned_to
+        lead.assigned_to,
+        lead.state,
+
       ]
     )
     const newClient = clientResult.rows[0]
