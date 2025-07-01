@@ -100,6 +100,21 @@ export interface Client {
   updated_at: string;
   assigned_to_name?: string; 
 }
+export interface Contract {
+  id: number;
+  client_id: number;
+  title: string;
+  start_date: string;
+  end_date: string;
+  monthly_value: number;
+  status: 'ativo' | 'expirado' | 'cancelado';
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  client_name?: string; // Campos que virão do JOIN
+  client_email?: string;
+  created_by_name?: string;
+}
 
 export interface Goal {
   id: string; 
@@ -144,6 +159,11 @@ interface PaginationInfo {
 
 export interface PaginatedUsersResponse {
   users: User[];
+  pagination: PaginationInfo;
+}
+
+export interface PaginatedContractsResponse {
+  contracts: Contract[];
   pagination: PaginationInfo;
 }
 
@@ -448,6 +468,22 @@ export const reportsAPI = {
 
   exportData: async (): Promise<any> => {
     const response = await apiClient.get("/reports/export");
+    return response.data;
+  },
+  
+};
+
+export const contractsAPI = {
+  getAll: async (params?: { status?: string; page?: number; limit?: number }): Promise<PaginatedContractsResponse> => {
+    const response = await apiClient.get("/contracts", { params });
+    return response.data;
+  },
+  create: async (contractData: Omit<Contract, "id" | "created_at" | "updated_at" | "created_by" | "status">): Promise<Contract> => {
+    const response = await apiClient.post("/contracts", contractData);
+    return response.data;
+  },
+  updateStatus: async (id: number, status: Contract['status']): Promise<Contract> => {
+    const response = await apiClient.put(`/contracts/${id}/status`, { status });
     return response.data;
   },
 };

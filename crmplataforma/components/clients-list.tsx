@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Card,
   CardContent,
@@ -25,14 +25,14 @@ import {
   Plus,
   Filter,
   Download,
-  Phone,
-  Mail,
   MessageSquare,
   Calendar,
   AlertCircle,
   Edit,
   ShoppingCart,
   Loader2,
+  MoreHorizontal, // Adicionado para o menu dropdown
+  FileText, // Adicionado para o ícone de contrato
 } from "lucide-react";
 import {
   Dialog,
@@ -49,7 +49,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { clientsAPI, type Client } from "@/lib/api-client";
+import { clientsAPI, contractsAPI, type Client } from "@/lib/api-client"; // Importado o contractsAPI
 import { useToast } from "@/hooks/use-toast";
 import {
   Pagination,
@@ -59,9 +59,15 @@ import {
   PaginationLink,
   PaginationNext,
   PaginationPrevious,
-} from "@/components/ui/pagination"; // <--- Importação dos componentes de paginação
+} from "@/components/ui/pagination";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"; // Importação do DropdownMenu
 
-const CLIENTS_PER_PAGE = 10; // <--- Definindo um limite menor para facilitar a visualização da paginação
+const CLIENTS_PER_PAGE = 10;
 
 const brazilianStates = [
   { value: "AC", label: "Acre" },
@@ -104,39 +110,40 @@ export function ClientsList() {
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const { toast } = useToast();
 
-  // ***** ESTADOS DE PAGINAÇÃO *****
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [totalClientsCount, setTotalClientsCount] = useState(0); // Para guardar o total retornado pela API
-  // ***** FIM DOS ESTADOS DE PAGINAÇÃO *****
+  const [totalClientsCount, setTotalClientsCount] = useState(0);
 
-  // Modificada para aceitar parâmetros de paginação
-  const loadClients = async (
-    page: number = currentPage,
-    limit: number = CLIENTS_PER_PAGE
-  ) => {
-    setIsLoading(true);
-    try {
-      const response = await clientsAPI.getAll(); // <--- Chamada sem argumentos
-      setClients(response.clients || []);
-      setFilteredClients(response.clients || []); // Já filtrou pela API, então filteredClients é o mesmo aqui
-      setTotalPages(response.pagination.pages); // <--- Atualiza o total de páginas
-      setTotalClientsCount(response.pagination.total); // <--- Atualiza o total de clientes
-    } catch (error) {
-      console.error("Erro ao carregar clientes:", error);
-      toast({ title: "Erro ao carregar clientes", variant: "destructive" });
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // --- Estados para o novo diálogo de contrato ---
+  const [isContractDialogOpen, setIsContractDialogOpen] = useState(false);
+  const [clientForContract, setClientForContract] = useState<Client | null>(
+    null
+  );
+
+  const loadClients = useCallback(
+    async (page: number = currentPage, limit: number = CLIENTS_PER_PAGE) => {
+      setIsLoading(true);
+      try {
+        const response = await clientsAPI.getAll();
+        setClients(response.clients || []);
+        setFilteredClients(response.clients || []);
+        setTotalPages(response.pagination.pages);
+        setTotalClientsCount(response.pagination.total);
+      } catch (error) {
+        console.error("Erro ao carregar clientes:", error);
+        toast({ title: "Erro ao carregar clientes", variant: "destructive" });
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [currentPage, toast]
+  );
 
   useEffect(() => {
-    loadClients(currentPage, CLIENTS_PER_PAGE); // Carrega a primeira página na montagem
-  }, [currentPage]); // Recarrega quando a página atual muda
+    loadClients(currentPage, CLIENTS_PER_PAGE);
+  }, [currentPage, loadClients]);
 
   useEffect(() => {
-    // A filtragem local pelo searchTerm agora age sobre os clientes da PÁGINA ATUAL
-    // Para filtrar em toda a base, precisaríamos de uma API de busca mais complexa
     const filtered = clients.filter(
       (c) =>
         c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -157,6 +164,11 @@ export function ClientsList() {
     setIsPurchaseDialogOpen(true);
   };
 
+  const handleOpenContractDialog = (client: Client) => {
+    setClientForContract(client);
+    setIsContractDialogOpen(true);
+  };
+
   const handleFormSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -172,6 +184,7 @@ export function ClientsList() {
       specialty: formData.get("specialty") as string,
       status: (formData.get("status") as "Ativo" | "Inativo") || "Ativo",
       total_spent: Number(formData.get("total_spent")) || 0,
+      state: formData.get("state") as string,
     };
 
     try {
@@ -182,17 +195,16 @@ export function ClientsList() {
         await clientsAPI.create(clientData as any);
         toast({ title: "Cliente criado" });
       }
-      setCurrentPage(1); // Volta para a primeira página ao criar/atualizar
-      await loadClients(1, CLIENTS_PER_PAGE); // Recarrega a primeira página
+      setCurrentPage(1);
+      await loadClients(1, CLIENTS_PER_PAGE);
       setIsFormDialogOpen(false);
       setSelectedClient(null);
-    } catch (error) {
-      console.error("Erro ao salvar cliente:", error);
+    } catch (error: any) {
       toast({
         title: "Erro ao salvar cliente",
         description:
-          (error as any).response?.data?.message ||
-          (error as any).response?.data?.error ||
+          error.response?.data?.message ||
+          error.response?.data?.error ||
           "Verifique os dados.",
         variant: "destructive",
       });
@@ -204,7 +216,6 @@ export function ClientsList() {
   const handleAddPurchase = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!selectedClient) return;
-
     setIsSubmitting(true);
     const formData = new FormData(e.currentTarget);
     const value = Number(formData.get("purchase_value"));
@@ -212,7 +223,7 @@ export function ClientsList() {
     try {
       await clientsAPI.addPurchase(selectedClient.id, { value });
       toast({ title: "Compra adicionada com sucesso!" });
-      await loadClients(currentPage, CLIENTS_PER_PAGE); // Recarrega a página atual
+      await loadClients(currentPage, CLIENTS_PER_PAGE);
       setIsPurchaseDialogOpen(false);
       setSelectedClient(null);
     } catch (error) {
@@ -221,19 +232,52 @@ export function ClientsList() {
       setIsSubmitting(false);
     }
   };
+
+  const handleContractSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!clientForContract) return;
+
+    setIsSubmitting(true);
+    const formData = new FormData(e.currentTarget);
+    const contractData = {
+      client_id: clientForContract.id,
+      title: formData.get("title") as string,
+      start_date: formData.get("start_date") as string,
+      end_date: formData.get("end_date") as string,
+      monthly_value: Number(formData.get("monthly_value")),
+    };
+
+    try {
+      await contractsAPI.create(contractData as any);
+      toast({ title: "Contrato criado com sucesso!" });
+      setIsContractDialogOpen(false);
+    } catch (error) {
+      toast({
+        title: "Erro ao criar contrato",
+        description: "Verifique os dados e tente novamente.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const formatWhatsAppLink = (phone: string) => {
     if (!phone) return "";
     const justDigits = phone.replace(/\D/g, "");
     return `https://wa.me/55${justDigits}`;
   };
+
   const getStatusColor = (status: string) =>
     status === "Ativo"
       ? "bg-green-100 text-green-800"
       : "bg-gray-100 text-gray-800";
+
   const needsReactivation = (lastPurchase: string) =>
     (new Date().getTime() - new Date(lastPurchase).getTime()) /
       (1000 * 3600 * 24) >
     60;
+
   const getRowClass = (lastPurchase: string) => {
     const diffDays =
       (new Date().getTime() - new Date(lastPurchase).getTime()) /
@@ -243,10 +287,9 @@ export function ClientsList() {
     return "";
   };
 
-  // Gerar array de números de página para os controles de paginação
   const getPageNumbers = () => {
     const pageNumbers = [];
-    const maxPagesToShow = 5; // Limite de botões de página para exibir
+    const maxPagesToShow = 5;
     let startPage = Math.max(1, currentPage - Math.floor(maxPagesToShow / 2));
     let endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
 
@@ -289,8 +332,7 @@ export function ClientsList() {
         <CardHeader>
           <CardTitle>
             Lista de Clientes ({totalClientsCount} no total)
-          </CardTitle>{" "}
-          {/* <--- Exibindo o total de clientes */}
+          </CardTitle>
           <CardDescription>
             Visualize e gerencie todos os clientes cadastrados
           </CardDescription>
@@ -312,7 +354,7 @@ export function ClientsList() {
                 <TableHead>Última Compra</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Valor Total</TableHead>
-                <TableHead>Ações</TableHead>
+                <TableHead className="text-right">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -331,9 +373,7 @@ export function ClientsList() {
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <Avatar className="h-10 w-10">
-                          <AvatarImage
-                          //src={client.avatar_url || "/placeholder.svg"}
-                          />
+                          <AvatarImage src={client.avatar_url} />
                           <AvatarFallback>
                             {client.name
                               .split(" ")
@@ -375,38 +415,43 @@ export function ClientsList() {
                         R$ {client.total_spent.toLocaleString("pt-BR")}
                       </div>
                     </TableCell>
-                    <TableCell>
-                      <div className="flex gap-1">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-8 w-8 p-0"
-                          onClick={() => handleOpenPurchaseDialog(client)}
-                        >
-                          <ShoppingCart className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-8 w-8 p-0"
-                        >
-                          <a
-                            href={formatWhatsAppLink(client.phone)}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                    <TableCell className="text-right">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" className="h-8 w-8 p-0">
+                            <span className="sr-only">Abrir menu</span>
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            onClick={() => handleOpenFormDialog(client)}
                           >
-                            <MessageSquare className="h-3 w-3 mr-1" />
-                          </a>
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-8 w-8 p-0"
-                          onClick={() => handleOpenFormDialog(client)}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                      </div>
+                            <Edit className="mr-2 h-4 w-4" /> Editar Cliente
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => handleOpenPurchaseDialog(client)}
+                          >
+                            <ShoppingCart className="mr-2 h-4 w-4" /> Adicionar
+                            Compra
+                          </DropdownMenuItem>
+                          <DropdownMenuItem asChild>
+                            <a
+                              href={formatWhatsAppLink(client.phone)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              <MessageSquare className="mr-2 h-4 w-4" />{" "}
+                              WhatsApp
+                            </a>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => handleOpenContractDialog(client)}
+                          >
+                            <FileText className="mr-2 h-4 w-4" /> Criar Contrato
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </TableCell>
                   </TableRow>
                 ))
@@ -424,8 +469,7 @@ export function ClientsList() {
             </TableBody>
           </Table>
 
-          {/* ***** CONTROLES DE PAGINAÇÃO ***** */}
-          {totalPages > 1 && ( // Exibe paginação apenas se houver mais de uma página
+          {totalPages > 1 && (
             <Pagination className="mt-6">
               <PaginationContent>
                 <PaginationItem>
@@ -434,9 +478,11 @@ export function ClientsList() {
                       setCurrentPage((prev) => Math.max(1, prev - 1))
                     }
                     aria-disabled={currentPage === 1}
-                    tabIndex={currentPage === 1 ? -1 : 0}
+                    tabIndex={currentPage === 1 ? -1 : undefined}
                     className={
-                      currentPage === 1 ? "pointer-events-none opacity-50" : ""
+                      currentPage === 1
+                        ? "pointer-events-none opacity-50"
+                        : undefined
                     }
                   />
                 </PaginationItem>
@@ -450,23 +496,21 @@ export function ClientsList() {
                     </PaginationLink>
                   </PaginationItem>
                 ))}
-                {totalPages > 5 &&
-                  currentPage < totalPages - 2 && ( // Exibir elipsis se houver muitas páginas e não estiver perto do fim
-                    <PaginationItem>
-                      <PaginationEllipsis />
-                    </PaginationItem>
-                  )}
-                {totalPages > 5 &&
-                  currentPage < totalPages - 2 && ( // Exibir última página se houver muitas e não for a última
-                    <PaginationItem>
-                      <PaginationLink
-                        onClick={() => setCurrentPage(totalPages)}
-                        isActive={totalPages === currentPage}
-                      >
-                        {totalPages}
-                      </PaginationLink>
-                    </PaginationItem>
-                  )}
+                {totalPages > 5 && currentPage < totalPages - 2 && (
+                  <PaginationItem>
+                    <PaginationEllipsis />
+                  </PaginationItem>
+                )}
+                {totalPages > 5 && currentPage < totalPages - 2 && (
+                  <PaginationItem>
+                    <PaginationLink
+                      onClick={() => setCurrentPage(totalPages)}
+                      isActive={totalPages === currentPage}
+                    >
+                      {totalPages}
+                    </PaginationLink>
+                  </PaginationItem>
+                )}
                 <PaginationItem>
                   <PaginationNext
                     onClick={() => {
@@ -477,22 +521,20 @@ export function ClientsList() {
                       }
                     }}
                     aria-disabled={currentPage === totalPages}
-                    tabIndex={currentPage === totalPages ? -1 : 0}
+                    tabIndex={currentPage === totalPages ? -1 : undefined}
                     className={
                       currentPage === totalPages
                         ? "pointer-events-none opacity-50"
-                        : ""
+                        : undefined
                     }
                   />
                 </PaginationItem>
               </PaginationContent>
             </Pagination>
           )}
-          {/* ***** FIM DOS CONTROLES DE PAGINAÇÃO ***** */}
         </CardContent>
       </Card>
 
-      {/* Diálogo para Adicionar/Editar Cliente */}
       <Dialog open={isFormDialogOpen} onOpenChange={setIsFormDialogOpen}>
         <DialogContent className="sm:max-w-xl">
           <DialogHeader>
@@ -670,7 +712,6 @@ export function ClientsList() {
         </DialogContent>
       </Dialog>
 
-      {/* Diálogo para Nova Compra */}
       <Dialog
         open={isPurchaseDialogOpen}
         onOpenChange={setIsPurchaseDialogOpen}
@@ -708,6 +749,69 @@ export function ClientsList() {
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 )}
                 Adicionar Compra
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={isContractDialogOpen}
+        onOpenChange={setIsContractDialogOpen}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              Novo Contrato para {clientForContract?.name}
+            </DialogTitle>
+            <DialogDescription>
+              Preencha os detalhes do contrato de prestação de serviço.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleContractSubmit} className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="title">Título do Contrato</Label>
+              <Input
+                id="title"
+                name="title"
+                placeholder="Ex: Contrato de Assessoria Mensal"
+                required
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="start_date">Data de Início</Label>
+                <Input id="start_date" name="start_date" type="date" required />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="end_date">Data Final</Label>
+                <Input id="end_date" name="end_date" type="date" required />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="monthly_value">Valor Mensal (R$)</Label>
+              <Input
+                id="monthly_value"
+                name="monthly_value"
+                type="number"
+                step="0.01"
+                placeholder="Ex: 500.00"
+                required
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsContractDialogOpen(false)}
+              >
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
+                Salvar Contrato
               </Button>
             </div>
           </form>

@@ -31,7 +31,8 @@ import {
   Bell,
   Search,
   Home,
-  LineChart, // <--- NOVO ÍCONE: LineChart para análise
+  LineChart,
+  FileText,
 } from "lucide-react";
 
 interface CRMLayoutProps {
@@ -73,7 +74,7 @@ export function CRMLayout({ children }: CRMLayoutProps) {
     { name: "Relatórios", href: "/reports", icon: BarChart3 },
     { name: "Metas", href: "/goals", icon: Target },
     { name: "Equipe", href: "/team", icon: Users },
-    // <--- NOVO ITEM DE NAVEGAÇÃO AQUI
+    { name: "Contratos", href: "/contracts", icon: FileText },
     { name: "Análise Clientes", href: "/client-analytics", icon: LineChart },
     { name: "Configurações", href: "/settings", icon: Settings },
   ];
