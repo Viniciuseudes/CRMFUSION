@@ -414,7 +414,7 @@ router.get("/ltv-analysis", async (req, res, next) => {
 
     if (period !== "all") {
       paramCount++;
-      dateFilter = ` AND c.entry_date >= $${paramCount}`;
+      dateFilter = ` AND c.created_at >= $${paramCount}`;
       params.push(startDate);
     }
 
@@ -568,7 +568,7 @@ router.get("/clients-by-state", async (req, res, next) => {
 
     if (req.user.role !== "admin") {
       paramCount++;
-      query += ` AND assigned_to = $${paramCount}`;
+      query += ` AND c.assigned_to = $${paramCount}`;
       params.push(req.user.id);
     }
 
