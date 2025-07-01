@@ -101,8 +101,8 @@ const brazilianStates = [
 
 export function ClientsList() {
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [clients, setClients] = useState<Client[]>([]);
-  const [filteredClients, setFilteredClients] = useState<Client[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
@@ -119,13 +119,28 @@ export function ClientsList() {
     null
   );
 
+  // Efeito para criar um "atraso" (debounce) na busca.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+      setCurrentPage(1);
+    }, 500);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [searchTerm]);
+
   const loadClients = useCallback(
-    async (page: number, limit: number) => {
+    async (page: number, limit: number, search: string) => {
       setIsLoading(true);
       try {
-        const response = await clientsAPI.getAll({ page, limit });
+        const response = await clientsAPI.getAll({
+          page,
+          limit,
+          searchTerm: search,
+        });
         setClients(response.clients || []);
-        setFilteredClients(response.clients || []);
         setTotalPages(response.pagination.pages);
         setTotalClientsCount(response.pagination.total);
       } catch (error) {
@@ -138,21 +153,10 @@ export function ClientsList() {
     [toast]
   );
 
+  // Efeito para buscar os dados. Re-executa quando a página ou o termo de busca (com debounce) mudam.
   useEffect(() => {
-    loadClients(currentPage, CLIENTS_PER_PAGE);
-  }, [currentPage, loadClients]);
-
-  useEffect(() => {
-    // Esta busca agora é feita em cima da página atual de clientes
-    const filtered = clients.filter(
-      (c) =>
-        c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (c.doctor &&
-          c.doctor.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        c.specialty.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-    setFilteredClients(filtered);
-  }, [searchTerm, clients]);
+    loadClients(currentPage, CLIENTS_PER_PAGE, debouncedSearchTerm);
+  }, [currentPage, debouncedSearchTerm, loadClients]);
 
   const handleOpenFormDialog = (client: Client | null) => {
     setSelectedClient(client);
@@ -196,7 +200,7 @@ export function ClientsList() {
         toast({ title: "Cliente criado" });
       }
       setCurrentPage(1);
-      await loadClients(1, CLIENTS_PER_PAGE);
+      await loadClients(1, CLIENTS_PER_PAGE, debouncedSearchTerm);
       setIsFormDialogOpen(false);
       setSelectedClient(null);
     } catch (error: any) {
@@ -223,7 +227,7 @@ export function ClientsList() {
     try {
       await clientsAPI.addPurchase(selectedClient.id, { value });
       toast({ title: "Compra adicionada com sucesso!" });
-      await loadClients(currentPage, CLIENTS_PER_PAGE);
+      await loadClients(currentPage, CLIENTS_PER_PAGE, debouncedSearchTerm);
       setIsPurchaseDialogOpen(false);
       setSelectedClient(null);
     } catch (error) {
@@ -365,7 +369,7 @@ export function ClientsList() {
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredClients.map((client) => (
+                clients.map((client) => (
                   <TableRow
                     key={client.id}
                     className={getRowClass(client.last_purchase)}
@@ -373,7 +377,7 @@ export function ClientsList() {
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <Avatar className="h-10 w-10">
-                          <AvatarImage src={client.avatar_url} />
+                          <AvatarImage src={undefined} />
                           <AvatarFallback>
                             {client.name
                               .split(" ")
@@ -456,7 +460,7 @@ export function ClientsList() {
                   </TableRow>
                 ))
               )}
-              {filteredClients.length === 0 && !isLoading && (
+              {clients.length === 0 && !isLoading && (
                 <TableRow>
                   <TableCell
                     colSpan={5}
