@@ -1,4 +1,3 @@
-// crmplataforma/components/client-analytics-dashboard.tsx
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
@@ -98,7 +97,7 @@ export function ClientAnalyticsDashboard() {
       if (results[1].status === "fulfilled") setLtvData(results[1].value);
       if (results[2].status === "fulfilled") setMrrData(results[2].value);
       if (results[3].status === "fulfilled")
-        setClientsByState(results[3].value || []); // ATUALIZA O NOVO ESTADO
+        setClientsByState(results[3].value || []);
     } catch (error) {
       console.error("Erro geral ao carregar relatórios de clientes:", error);
     } finally {
@@ -335,7 +334,10 @@ export function ClientAnalyticsDashboard() {
         <TabsContent value="location" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Clientes por Estado</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <MapPin className="h-5 w-5" />
+                Clientes por Estado
+              </CardTitle>
               <CardDescription>
                 Distribuição geográfica dos seus clientes pelo Brasil.
               </CardDescription>
@@ -345,11 +347,11 @@ export function ClientAnalyticsDashboard() {
                 <BarChart
                   data={clientsByState}
                   layout="vertical"
-                  margin={{ left: 20 }}
+                  margin={{ left: 10 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis type="number" allowDecimals={false} />
-                  <YAxis dataKey="state" type="category" width={60} />
+                  <YAxis dataKey="state" type="category" width={40} />
                   <Tooltip formatter={(value) => [value, "Clientes"]} />
                   <Legend />
                   <Bar dataKey="clients" name="Nº de Clientes" fill="#f59e0b" />
@@ -390,7 +392,7 @@ export function ClientAnalyticsDashboard() {
                       "Receita",
                     ]}
                     labelFormatter={(label) =>
-                      format(parseISO(`${label}-01`), "MMMM yyyy", {
+                      format(parseISO(`${label}-01`), "MMMM de yyyy", {
                         locale: ptBR,
                       })
                     }
