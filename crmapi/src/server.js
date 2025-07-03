@@ -10,6 +10,7 @@ const authRoutes = require("./routes/auth")
 const userRoutes = require("./routes/users")
 const leadRoutes = require("./routes/leads")
 const clientRoutes = require("./routes/clients")
+const clinicsRouter = require("./routes/clinics");
 const goalRoutes = require("./routes/goals")
 const activityRoutes = require("./routes/activities")
 const reportRoutes = require("./routes/reports")
@@ -22,14 +23,11 @@ const PORT = process.env.PORT || 3001
 
 // Rate limiting AJUSTADO PARA TESTES
 const limiter = rateLimit({
-  windowMs: 1 * 60 * 1000, // 1 minuto (original era 15 minutos)
-  max: 200, // 200 requisições por minuto (original era 100, aumentei para testes)
+  windowMs: 1 * 60 * 1000,
+  max: 200, 
   message: "Muitas tentativas, tente novamente em breve.",
-  standardHeaders: true, // Adiciona cabeçalhos RateLimit-*
-  legacyHeaders: false, // Desabilita cabeçalhos X-RateLimit-*
-  // Para requisições OPTIONS (preflight do CORS) não serem bloqueadas pelo rate limit:
-  // Se você ainda tiver problemas, pode ser necessário adicionar uma função skip:
-  // skip: (req, res) => req.method === 'OPTIONS',
+  standardHeaders: true, 
+  legacyHeaders: false, 
 });
 
 // Middleware com ORDEM AJUSTADA (CORS antes de limiter)
@@ -42,8 +40,8 @@ app.use(
   cors({
     origin: process.env.FRONTEND_URL || "http://localhost:3000",
     credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"], // Garanta que OPTIONS está aqui
-    allowedHeaders: ["Content-Type", "Authorization"], // Garanta que os cabeçalhos necessários estão aqui
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"], 
+    allowedHeaders: ["Content-Type", "Authorization"], 
   })
 );
 
@@ -70,6 +68,7 @@ app.use("/api/goals", authenticateToken, goalRoutes);
 app.use("/api/activities", authenticateToken, activityRoutes);
 app.use("/api/reports", authenticateToken, reportRoutes);
 app.use("/api/contracts", authenticateToken, contractRoutes);
+app.use("/api/clinics", clinicsRouter);
 
 // Error handling
 app.use(errorHandler);
