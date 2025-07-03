@@ -71,6 +71,7 @@ export function CRMLayout({ children }: CRMLayoutProps) {
     { name: "Dashboard", href: "/", icon: Home },
     { name: "Leads", href: "/leads", icon: UserPlus },
     { name: "Clientes", href: "/clients", icon: Users },
+    { name: "Clinicas", href: "/clinics", icon: Home },
     { name: "Relatórios", href: "/reports", icon: BarChart3 },
     { name: "Metas", href: "/goals", icon: Target },
     { name: "Equipe", href: "/team", icon: Users },

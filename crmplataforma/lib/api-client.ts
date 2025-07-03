@@ -115,7 +115,33 @@ export interface Contract {
   client_email?: string;
   created_by_name?: string;
 }
+export interface Room {
+  id: number;
+  clinic_id: number;
+  name: string;
+  description?: string;
+  price_per_hour: number;
+  negotiation_margin_hour: number;
+  price_per_shift: number;
+  negotiation_margin_shift: number;
+  price_per_day: number;
+  negotiation_margin_day: number;
+  price_fixed: number;
+  negotiation_margin_fixed: number;
+}
 
+export interface Clinic {
+  id: number;
+  name: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zip_code?: string;
+  phone?: string;
+  host_id?: number;
+  host_name?: string; // Vem do JOIN no backend
+  rooms?: Room[]; // As salas serão aninhadas aqui
+}
 export interface Goal {
   id: string; 
   title: string;
@@ -309,7 +335,7 @@ type CreateClientData = Omit<Client, "id" | "created_at" | "updated_at" | "assig
 type UpdateClientData = Partial<Omit<Client, "id" | "created_at" | "updated_at" | "assigned_to" | "assigned_to_name">>;
 
 export const clientsAPI = {
-  getAll: async (params?: { page?: number; limit?: number; status?: string; specialty?: string }): Promise<PaginatedClientsResponse> => {
+  getAll: async (params?: { page?: number; limit?: number; status?: string; specialty?: string; searchTerm?: string }): Promise<PaginatedClientsResponse> => {
     const response = await apiClient.get("/clients", { params });
     return response.data;
   },
@@ -473,6 +499,8 @@ export const reportsAPI = {
   
 };
 
+
+
 export const contractsAPI = {
   getAll: async (params?: { status?: string; page?: number; limit?: number }): Promise<PaginatedContractsResponse> => {
     const response = await apiClient.get("/contracts", { params });
@@ -486,6 +514,26 @@ export const contractsAPI = {
     const response = await apiClient.put(`/contracts/${id}/status`, { status });
     return response.data;
   },
+};
+
+export const clinicsAPI = {
+  getAll: async (): Promise<Clinic[]> => {
+    const response = await apiClient.get("/clinics");
+    return response.data;
+  },
+  getById: async (id: number): Promise<Clinic> => {
+    const response = await apiClient.get(`/clinics/${id}`);
+    return response.data;
+  },
+  create: async (clinicData: Omit<Clinic, 'id'>): Promise<Clinic> => {
+    const response = await apiClient.post("/clinics", clinicData);
+    return response.data;
+  },
+  createRoom: async (clinicId: number, roomData: Omit<Room, 'id' | 'clinic_id'>): Promise<Room> => {
+    const response = await apiClient.post(`/clinics/${clinicId}/rooms`, roomData);
+    return response.data;
+  },
+
 };
 
 export default apiClient;
