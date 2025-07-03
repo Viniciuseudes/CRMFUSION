@@ -1,11 +1,12 @@
 "use client";
+
 import { useState, useEffect, useCallback } from "react";
 import {
   Card,
   CardContent,
+  CardDescription,
   CardHeader,
   CardTitle,
-  CardDescription,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -28,6 +29,9 @@ import {
   Loader2,
   PauseCircle,
   PlayCircle,
+  MoreVertical,
+  Info, // Ícone para detalhes
+  Edit, // Ícone para editar
 } from "lucide-react";
 import {
   Dialog,
@@ -37,6 +41,13 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -157,7 +168,14 @@ export function LeadsFunnel() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [filteredLeads, setFilteredLeads] = useState<Lead[]>([]);
   const [selectedFunnel, setSelectedFunnel] = useState("marketing");
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
+
+  // --- Estados dos diálogos atualizados ---
+  const [isLeadFormOpen, setIsLeadFormOpen] = useState(false);
+  const [editingLead, setEditingLead] = useState<Lead | null>(null);
+
+  const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
+  const [leadForDetails, setLeadForDetails] = useState<Lead | null>(null);
+
   const [moveFunnelDialogOpen, setMoveFunnelDialogOpen] = useState(false);
   const [selectedLeadId, setSelectedLeadId] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -208,7 +226,6 @@ export function LeadsFunnel() {
 
   useEffect(() => {
     let currentFilteredLeads = [...leads];
-
     if (searchTerm) {
       currentFilteredLeads = currentFilteredLeads.filter(
         (lead) =>
@@ -246,6 +263,64 @@ export function LeadsFunnel() {
     setFilteredLeads(currentFilteredLeads);
   }, [leads, searchTerm, filters]);
 
+  const handleOpenLeadForm = (lead: Lead | null) => {
+    setEditingLead(lead);
+    setIsLeadFormOpen(true);
+  };
+
+  const handleOpenDetailsDialog = (lead: Lead) => {
+    setLeadForDetails(lead);
+    setIsDetailsDialogOpen(true);
+  };
+
+  const handleSaveLead = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const currentFunnelData = funnels.find((f) => f.id === selectedFunnel);
+
+    if (!currentFunnelData && !editingLead) {
+      toast({
+        title: "Erro de Funil",
+        description: "Funil selecionado não é válido.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const leadData = {
+      name: formData.get("name") as string,
+      specialty: formData.get("specialty") as string,
+      state: formData.get("state") as string,
+      phone: formData.get("phone") as string,
+      email: formData.get("email") as string,
+      value: Number(formData.get("value")) || 0,
+      notes: formData.get("notes") as string,
+      source: formData.get("source") as Lead["source"],
+    };
+
+    try {
+      if (editingLead) {
+        await leadsAPI.update(editingLead.id, leadData);
+        toast({ title: "Lead atualizado com sucesso!" });
+      } else {
+        const createData = {
+          ...leadData,
+          funnel: currentFunnelData!.id,
+          stage: currentFunnelData!.stages[0].id,
+          tags: ["Novo"],
+        };
+        await leadsAPI.create(createData);
+        toast({ title: "Lead criado com sucesso!" });
+      }
+      fetchLeads();
+      setIsLeadFormOpen(false);
+      setEditingLead(null);
+    } catch (error) {
+      console.error("Erro ao salvar lead:", error);
+      toast({ title: "Erro ao salvar lead", variant: "destructive" });
+    }
+  };
+
   const handleToggleStandby = async (lead: Lead) => {
     const newStandbyState = !lead.is_standby;
     const actionText = newStandbyState ? "movido para stand-by" : "reativado";
@@ -274,55 +349,6 @@ export function LeadsFunnel() {
       valueRange: "",
       source: "",
     });
-  };
-
-  const handleSaveLead = async (formData: FormData) => {
-    const currentFunnelData = funnels.find((f) => f.id === selectedFunnel);
-
-    if (
-      !currentFunnelData ||
-      !currentFunnelData.stages ||
-      currentFunnelData.stages.length === 0
-    ) {
-      toast({
-        title: "Erro de Configuração",
-        description:
-          "Não foi possível determinar o funil ou estágio inicial. Verifique a configuração dos funis.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const leadDataToSave = {
-      name: formData.get("name") as string,
-      specialty: formData.get("specialty") as string,
-      state: formData.get("state") as string,
-      phone: formData.get("phone") as string,
-      email: formData.get("email") as string,
-      value: Number(formData.get("value")) || 0,
-      notes: formData.get("notes") as string,
-      source: formData.get("source") as Lead["source"],
-      funnel: currentFunnelData.id,
-      stage: currentFunnelData.stages[0].id,
-      tags: ["Novo"],
-    };
-
-    try {
-      await leadsAPI.create(leadDataToSave);
-      toast({
-        title: "Lead criado",
-        description: `${leadDataToSave.name} foi adicionado ao funil ${currentFunnelData.title} no estágio ${currentFunnelData.stages[0].title}.`,
-      });
-      fetchLeads();
-      setIsDialogOpen(false);
-    } catch (error) {
-      console.error("Erro ao salvar lead:", error);
-      toast({
-        title: "Erro ao criar lead",
-        description: "Não foi possível salvar o novo lead.",
-        variant: "destructive",
-      });
-    }
   };
 
   const handleOpenConvertDialog = (lead: Lead) => {
@@ -594,7 +620,7 @@ export function LeadsFunnel() {
             <PopoverTrigger asChild>
               <Button variant="outline">
                 <Filter className="mr-2 h-4 w-4" />
-                Filtros
+                Filtros{" "}
                 {hasActiveFilters && (
                   <Badge
                     variant="destructive"
@@ -745,154 +771,10 @@ export function LeadsFunnel() {
             <Download className="mr-2 h-4 w-4" />
             Backup
           </Button>
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Novo Lead
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px]">
-              <DialogHeader>
-                <DialogTitle>Adicionar Novo Lead</DialogTitle>
-                <DialogDescription>
-                  Preencha as informações do novo lead
-                </DialogDescription>
-              </DialogHeader>
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  handleSaveLead(new FormData(e.currentTarget));
-                }}
-                className="grid gap-4 py-4"
-              >
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="name" className="text-right">
-                    Nome
-                  </Label>
-                  <Input
-                    id="name"
-                    name="name"
-                    className="col-span-3"
-                    required
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="specialty" className="text-right">
-                    Especialidade
-                  </Label>
-                  <Select name="specialty" required>
-                    <SelectTrigger className="col-span-3">
-                      <SelectValue placeholder="Selecione..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Enfermagem">Enfermagem</SelectItem>
-                      <SelectItem value="Farmacia">Farmacia</SelectItem>
-                      <SelectItem value="Medicina">Medicina</SelectItem>
-                      <SelectItem value="Biomedicina">Biomedicina</SelectItem>
-                      <SelectItem value="Esteticista">Esteticista</SelectItem>
-                      <SelectItem value="Psicologia">Psicologia</SelectItem>
-                      <SelectItem value="Nutricionista">
-                        Nutricionista
-                      </SelectItem>
-                      <SelectItem value="Odontologia">Odontologia</SelectItem>
-                      <SelectItem value="Dermatologia">Dermatologia</SelectItem>
-                      <SelectItem value="Ortopedia">Ortopedia</SelectItem>
-                      <SelectItem value="Pediatria">Pediatria</SelectItem>
-                      <SelectItem value="Neurologia">Neurologia</SelectItem>
-                      <SelectItem value="Ginecologia">Ginecologia</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="state" className="text-right">
-                    Estado
-                  </Label>
-                  <Select name="state">
-                    <SelectTrigger className="col-span-3">
-                      <SelectValue placeholder="Selecione o estado..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {brazilianStates.map((state) => (
-                        <SelectItem key={state.value} value={state.value}>
-                          {state.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="source" className="text-right">
-                    Origem
-                  </Label>
-                  <Select name="source" required>
-                    <SelectTrigger className="col-span-3">
-                      <SelectValue placeholder="Selecione..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="whatsapp">WhatsApp</SelectItem>
-                      <SelectItem value="instagram">Instagram</SelectItem>
-                      <SelectItem value="google">Google</SelectItem>
-                      <SelectItem value="indicacao">Indicação</SelectItem>
-                      <SelectItem value="plataforma">Plataforma</SelectItem>
-                      <SelectItem value="site">Site</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="phone" className="text-right">
-                    Telefone
-                  </Label>
-                  <Input
-                    id="phone"
-                    name="phone"
-                    className="col-span-3"
-                    required
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="email" className="text-right">
-                    Email
-                  </Label>
-                  <Input
-                    id="email"
-                    name="email"
-                    type="email"
-                    className="col-span-3"
-                    required
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="value" className="text-right">
-                    Valor Estimado
-                  </Label>
-                  <Input
-                    id="value"
-                    name="value"
-                    type="number"
-                    className="col-span-3"
-                    placeholder="0"
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-start gap-4">
-                  <Label htmlFor="notes" className="text-right pt-2">
-                    Observações
-                  </Label>
-                  <Textarea id="notes" name="notes" className="col-span-3" />
-                </div>
-                <div className="flex justify-end gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setIsDialogOpen(false)}
-                  >
-                    Cancelar
-                  </Button>
-                  <Button type="submit">Salvar Lead</Button>
-                </div>
-              </form>
-            </DialogContent>
-          </Dialog>
+          <Button onClick={() => handleOpenLeadForm(null)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Novo Lead
+          </Button>
         </div>
       </div>
 
@@ -982,12 +864,20 @@ export function LeadsFunnel() {
                       stageLeads.map((lead) => (
                         <Card
                           key={lead.id}
-                          className={`hover:shadow-lg transition-shadow w-full bg-card ${
+                          className={`relative hover:shadow-lg transition-shadow w-full bg-card ${
                             lead.is_converted_client
                               ? "border-green-400 border-2"
                               : ""
                           }`}
                         >
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="absolute top-1 right-1 h-7 w-7"
+                            onClick={() => handleOpenDetailsDialog(lead)}
+                          >
+                            <Info className="h-4 w-4 text-muted-foreground" />
+                          </Button>
                           <CardContent className="p-3">
                             <div className="flex items-start gap-3">
                               <Avatar className="h-9 w-9">
@@ -1007,7 +897,7 @@ export function LeadsFunnel() {
                                     .toUpperCase()}
                                 </AvatarFallback>
                               </Avatar>
-                              <div className="flex-1 space-y-1.5">
+                              <div className="flex-1 space-y-1.5 pr-6">
                                 <div>
                                   <h4 className="font-semibold text-sm">
                                     {lead.name}
@@ -1074,7 +964,7 @@ export function LeadsFunnel() {
                                     </div>
                                   )}
                                 </div>
-                                <div className="flex flex-wrap gap-1 pt-1.5">
+                                <div className="flex flex-wrap items-center gap-1 pt-1.5">
                                   <Button
                                     asChild
                                     size="sm"
@@ -1144,23 +1034,39 @@ export function LeadsFunnel() {
                                     <PauseCircle className="h-3 w-3 mr-1" />{" "}
                                     Stand-by
                                   </Button>
-                                  {currentFunnelData.id === "sales" &&
-                                    stage.id === "closing" && (
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
                                       <Button
+                                        variant="ghost"
                                         size="sm"
-                                        variant="default"
-                                        className="h-6 text-xs px-2 bg-green-500 hover:bg-green-600 text-white"
-                                        onClick={() =>
-                                          handleOpenConvertDialog(lead)
-                                        }
-                                        disabled={lead.is_converted_client}
+                                        className="h-6 w-6 p-0"
                                       >
-                                        <UserCheck className="h-3 w-3 mr-1" />
-                                        {lead.is_converted_client
-                                          ? "Convertido"
-                                          : "Converter"}
+                                        <MoreVertical className="h-4 w-4" />
                                       </Button>
-                                    )}
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                      <DropdownMenuItem
+                                        onClick={() => handleOpenLeadForm(lead)}
+                                      >
+                                        <Edit className="mr-2 h-4 w-4" />
+                                        Editar Lead
+                                      </DropdownMenuItem>
+                                      {currentFunnelData.id === "sales" &&
+                                        stage.id === "closing" && (
+                                          <DropdownMenuItem
+                                            onClick={() =>
+                                              handleOpenConvertDialog(lead)
+                                            }
+                                            disabled={lead.is_converted_client}
+                                          >
+                                            <UserCheck className="mr-2 h-4 w-4" />
+                                            {lead.is_converted_client
+                                              ? "Convertido"
+                                              : "Converter"}
+                                          </DropdownMenuItem>
+                                        )}
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
                                 </div>
                               </div>
                             </div>
@@ -1317,6 +1223,178 @@ export function LeadsFunnel() {
           </CardContent>
         </Card>
       )}
+      <Dialog open={isLeadFormOpen} onOpenChange={setIsLeadFormOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>
+              {editingLead ? "Editar Lead" : "Adicionar Novo Lead"}
+            </DialogTitle>
+            <DialogDescription>
+              {editingLead
+                ? "Altere as informações do lead abaixo."
+                : "Preencha as informações do novo lead."}
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSaveLead} className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="name" className="text-right">
+                Nome
+              </Label>
+              <Input
+                id="name"
+                name="name"
+                className="col-span-3"
+                defaultValue={editingLead?.name ?? ""}
+                required
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="specialty" className="text-right">
+                Especialidade
+              </Label>
+              <Select
+                name="specialty"
+                defaultValue={editingLead?.specialty}
+                required
+              >
+                <SelectTrigger className="col-span-3">
+                  <SelectValue placeholder="Selecione..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Enfermagem">Enfermagem</SelectItem>
+                  <SelectItem value="Farmacia">Farmacia</SelectItem>
+                  <SelectItem value="Medicina">Medicina</SelectItem>
+                  <SelectItem value="Biomedicina">Biomedicina</SelectItem>
+                  <SelectItem value="Esteticista">Esteticista</SelectItem>
+                  <SelectItem value="Psicologia">Psicologia</SelectItem>
+                  <SelectItem value="Nutricionista">Nutricionista</SelectItem>
+                  <SelectItem value="Odontologia">Odontologia</SelectItem>
+                  <SelectItem value="Dermatologia">Dermatologia</SelectItem>
+                  <SelectItem value="Ortopedia">Ortopedia</SelectItem>
+                  <SelectItem value="Pediatria">Pediatria</SelectItem>
+                  <SelectItem value="Neurologia">Neurologia</SelectItem>
+                  <SelectItem value="Ginecologia">Ginecologia</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="state" className="text-right">
+                Estado
+              </Label>
+              <Select name="state" defaultValue={editingLead?.state}>
+                <SelectTrigger className="col-span-3">
+                  <SelectValue placeholder="Selecione o estado..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {brazilianStates.map((state) => (
+                    <SelectItem key={state.value} value={state.value}>
+                      {state.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="source" className="text-right">
+                Origem
+              </Label>
+              <Select name="source" defaultValue={editingLead?.source} required>
+                <SelectTrigger className="col-span-3">
+                  <SelectValue placeholder="Selecione..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                  <SelectItem value="instagram">Instagram</SelectItem>
+                  <SelectItem value="google">Google</SelectItem>
+                  <SelectItem value="indicacao">Indicação</SelectItem>
+                  <SelectItem value="plataforma">Plataforma</SelectItem>
+                  <SelectItem value="site">Site</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="phone" className="text-right">
+                Telefone
+              </Label>
+              <Input
+                id="phone"
+                name="phone"
+                className="col-span-3"
+                defaultValue={editingLead?.phone ?? ""}
+                required
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="email" className="text-right">
+                Email
+              </Label>
+              <Input
+                id="email"
+                name="email"
+                type="email"
+                className="col-span-3"
+                defaultValue={editingLead?.email ?? ""}
+                required
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="value" className="text-right">
+                Valor Estimado
+              </Label>
+              <Input
+                id="value"
+                name="value"
+                type="number"
+                className="col-span-3"
+                defaultValue={editingLead?.value ?? 0}
+                placeholder="0"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-start gap-4">
+              <Label htmlFor="notes" className="text-right pt-2">
+                Observações
+              </Label>
+              <Textarea
+                id="notes"
+                name="notes"
+                className="col-span-3"
+                defaultValue={editingLead?.notes ?? ""}
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setIsLeadFormOpen(false);
+                  setEditingLead(null);
+                }}
+              >
+                Cancelar
+              </Button>
+              <Button type="submit">
+                {editingLead ? "Salvar Alterações" : "Salvar Lead"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={isDetailsDialogOpen} onOpenChange={setIsDetailsDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Detalhes de {leadForDetails?.name}</DialogTitle>
+            <DialogDescription>
+              Anotações e informações adicionais sobre este lead.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="prose prose-sm dark:prose-invert max-w-none rounded-md border p-4 max-h-[400px] overflow-y-auto">
+            <p>
+              {leadForDetails?.notes ||
+                "Nenhuma anotação cadastrada para este lead."}
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
       <Dialog
         open={moveFunnelDialogOpen}
         onOpenChange={setMoveFunnelDialogOpen}
@@ -1349,7 +1427,6 @@ export function LeadsFunnel() {
           </div>
         </DialogContent>
       </Dialog>
-
       <Dialog open={isConvertDialogOpen} onOpenChange={setIsConvertDialogOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
