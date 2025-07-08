@@ -33,6 +33,7 @@ import {
   Home,
   LineChart,
   FileText,
+  Database,
 } from "lucide-react";
 
 interface CRMLayoutProps {
@@ -70,6 +71,7 @@ export function CRMLayout({ children }: CRMLayoutProps) {
   const navigation = [
     { name: "Dashboard", href: "/", icon: Home },
     { name: "Leads", href: "/leads", icon: UserPlus },
+    { name: "BaseX", href: "/basex", icon: Database },
     { name: "Clientes", href: "/clients", icon: Users },
     { name: "Clinicas", href: "/clinics", icon: Home },
     { name: "Relatórios", href: "/reports", icon: BarChart3 },

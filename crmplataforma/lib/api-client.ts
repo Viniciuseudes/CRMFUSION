@@ -175,6 +175,22 @@ export interface Activity {
   metadata?: Record<string, any>;
 }
 
+export interface BaseXLead {
+  id: number;
+  name: string;
+  specialty: string;
+  whatsapp?: string;
+  instagram?: string;
+  is_accessible: boolean;
+  needs_room: boolean;
+  patient_demand: boolean;
+  valid_council: boolean;
+  general_info?: string;
+  created_by: string;
+  created_at: string;
+  created_by_name: string;
+}
+
 // --- INTERFACES PARA RESPOSTAS PAGINADAS ---
 interface PaginationInfo {
   page: number;
@@ -534,6 +550,18 @@ export const clinicsAPI = {
     return response.data;
   },
 
+};
+
+
+export const basexAPI = {
+  getAll: async (): Promise<BaseXLead[]> => {
+    const response = await apiClient.get("/basex");
+    return response.data;
+  },
+  create: async (data: Omit<BaseXLead, 'id' | 'created_at' | 'created_by' | 'created_by_name'>): Promise<BaseXLead> => {
+    const response = await apiClient.post("/basex", data);
+    return response.data;
+  },
 };
 
 export default apiClient;
