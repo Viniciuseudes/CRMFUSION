@@ -1,10 +1,10 @@
 const express = require("express");
 const pool = require("../config/database");
-const { requireRole } = require("../middleware/auth"); // Garante que a importação existe
+const { requireRole } = require("../middleware/auth");
 
 const router = express.Router();
 
-// ROTA PÚBLICA: Listar todas as clínicas
+// GET /api/clinics - Listar todas as clínicas
 router.get("/", async (req, res, next) => {
   try {
     const result = await pool.query("SELECT * FROM clinics ORDER BY name");
@@ -14,28 +14,12 @@ router.get("/", async (req, res, next) => {
   }
 });
 
-// ROTA PROTEGIDA: Criar uma nova clínica (Apenas Admin e Gerente)
-router.post("/", requireRole(['admin', 'gerente']), async (req, res, next) => {
-  try {
-    // Usando 'host_name' que agora é um texto
-    const { name, address, city, state, zip_code, phone, host_name } = req.body;
-    
-    const result = await pool.query(
-      "INSERT INTO clinics (name, address, city, state, zip_code, phone, host_name) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *",
-      [name, address, city, state, zip_code, phone, host_name]
-    );
-    res.status(201).json(result.rows[0]);
-  } catch (error) {
-    next(error);
-  }
-});
-
-// --- Outras rotas (GET por ID, rotas de Salas) permanecem abaixo ---
-
-// GET /api/clinics/:id 
+// GET /api/clinics/:id - Obter detalhes de uma clínica
 router.get("/:id", async (req, res, next) => {
     try {
         const { id } = req.params;
+        // --- CORREÇÃO APLICADA AQUI ---
+        // Removido o 'c.' que estava causando o erro de sintaxe
         const clinicResult = await pool.query("SELECT * FROM clinics WHERE id = $1", [id]);
 
         if (clinicResult.rows.length === 0) {
@@ -50,6 +34,21 @@ router.get("/:id", async (req, res, next) => {
     } catch (error) {
         next(error);
     }
+});
+
+// POST /api/clinics - Criar uma nova clínica (Apenas Admin e Gerente)
+router.post("/", requireRole(['admin', 'gerente']), async (req, res, next) => {
+  try {
+    const { name, address, city, state, zip_code, phone, host_name } = req.body;
+    
+    const result = await pool.query(
+      "INSERT INTO clinics (name, address, city, state, zip_code, phone, host_name) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *",
+      [name, address, city, state, zip_code, phone, host_name]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    next(error);
+  }
 });
 
 // POST /api/clinics/:clinicId/rooms
@@ -85,6 +84,5 @@ router.post("/:clinicId/rooms", requireRole(["admin", "gerente"]), async (req, r
         next(error);
     }
 });
-
 
 module.exports = router;
