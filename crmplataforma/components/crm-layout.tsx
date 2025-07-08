@@ -33,7 +33,7 @@ import {
   Home,
   LineChart,
   FileText,
-  Database,
+  Database, // Certifique-se que o ícone Database está importado
 } from "lucide-react";
 
 interface CRMLayoutProps {
@@ -59,14 +59,10 @@ export function CRMLayout({ children }: CRMLayoutProps) {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // ##### FUNÇÃO CORRIGIDA #####
   const handleLogout = () => {
-    logout(); // Limpa o estado e o token
-    // Força um recarregamento completo para a página inicial
-    // Isso garante que todo o estado da aplicação seja resetado.
+    logout();
     window.location.href = "/";
   };
-  // ##### FIM DA CORREÇÃO #####
 
   const navigation = [
     { name: "Dashboard", href: "/", icon: Home },
@@ -85,10 +81,13 @@ export function CRMLayout({ children }: CRMLayoutProps) {
   const getVisibleNavigation = () => {
     if (!user) return [];
 
+    // --- INÍCIO DA CORREÇÃO ---
     if (user.role === "colaborador") {
-      const allowedHrefs = ["/leads", "/clients"];
+      // Apenas "Clinicas" e "BaseX" serão visíveis para colaboradores
+      const allowedHrefs = ["/clinics", "/basex"];
       return navigation.filter((item) => allowedHrefs.includes(item.href));
     }
+    // --- FIM DA CORREÇÃO ---
 
     return navigation;
   };
