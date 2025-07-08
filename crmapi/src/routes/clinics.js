@@ -7,6 +7,7 @@ const router = express.Router();
 // GET /api/clinics - Listar todas as clínicas
 router.get("/", async (req, res, next) => {
   try {
+    // Query corrigida: Não faz mais JOIN com users, pois host_name é local.
     const result = await pool.query("SELECT * FROM clinics ORDER BY name");
     res.json(result.rows);
   } catch (error) {
@@ -16,32 +17,33 @@ router.get("/", async (req, res, next) => {
 
 // GET /api/clinics/:id - Obter detalhes de uma clínica
 router.get("/:id", async (req, res, next) => {
-    try {
-        const { id } = req.params;
-        // --- CORREÇÃO APLICADA AQUI ---
-        // Removido o 'c.' que estava causando o erro de sintaxe
-        const clinicResult = await pool.query("SELECT * FROM clinics WHERE id = $1", [id]);
+  try {
+    const { id } = req.params;
+    // Query corrigida: Não faz mais JOIN com users.
+    const clinicResult = await pool.query("SELECT * FROM clinics WHERE id = $1", [id]);
 
-        if (clinicResult.rows.length === 0) {
-            return res.status(404).json({ error: "Clínica não encontrada" });
-        }
-
-        const roomsResult = await pool.query("SELECT * FROM rooms WHERE clinic_id = $1 ORDER BY name", [id]);
-        const clinic = clinicResult.rows[0];
-        clinic.rooms = roomsResult.rows;
-
-        res.json(clinic);
-    } catch (error) {
-        next(error);
+    if (clinicResult.rows.length === 0) {
+      return res.status(404).json({ error: "Clínica não encontrada" });
     }
+
+    const roomsResult = await pool.query("SELECT * FROM rooms WHERE clinic_id = $1 ORDER BY name", [id]);
+    const clinic = clinicResult.rows[0];
+    clinic.rooms = roomsResult.rows;
+
+    res.json(clinic);
+  } catch (error) {
+    next(error);
+  }
 });
 
 // POST /api/clinics - Criar uma nova clínica (Apenas Admin e Gerente)
 router.post("/", requireRole(['admin', 'gerente']), async (req, res, next) => {
   try {
+    // Corrigido: Usa host_name do corpo da requisição.
     const { name, address, city, state, zip_code, phone, host_name } = req.body;
     
     const result = await pool.query(
+      // Corrigido: Insere na coluna host_name.
       "INSERT INTO clinics (name, address, city, state, zip_code, phone, host_name) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *",
       [name, address, city, state, zip_code, phone, host_name]
     );
@@ -51,38 +53,39 @@ router.post("/", requireRole(['admin', 'gerente']), async (req, res, next) => {
   }
 });
 
+
 // POST /api/clinics/:clinicId/rooms
 router.post("/:clinicId/rooms", requireRole(["admin", "gerente"]), async (req, res, next) => {
-    try {
-        const { clinicId } = req.params;
-        const { 
-          name, description, 
-          price_per_hour, negotiation_margin_hour,
-          price_per_shift, negotiation_margin_shift,
-          price_per_day, negotiation_margin_day,
-          price_fixed, negotiation_margin_fixed
-        } = req.body;
+  try {
+    const { clinicId } = req.params;
+    const { 
+      name, description, 
+      price_per_hour, negotiation_margin_hour,
+      price_per_shift, negotiation_margin_shift,
+      price_per_day, negotiation_margin_day,
+      price_fixed, negotiation_margin_fixed
+    } = req.body;
 
-        const result = await pool.query(
-          `INSERT INTO rooms (
-            clinic_id, name, description, 
-            price_per_hour, negotiation_margin_hour,
-            price_per_shift, negotiation_margin_shift,
-            price_per_day, negotiation_margin_day,
-            price_fixed, negotiation_margin_fixed
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
-          [
-            clinicId, name, description,
-            price_per_hour, negotiation_margin_hour,
-            price_per_shift, negotiation_margin_shift,
-            price_per_day, negotiation_margin_day,
-            price_fixed, negotiation_margin_fixed
-          ]
-        );
-        res.status(201).json(result.rows[0]);
-    } catch (error) {
-        next(error);
-    }
+    const result = await pool.query(
+      `INSERT INTO rooms (
+        clinic_id, name, description, 
+        price_per_hour, negotiation_margin_hour,
+        price_per_shift, negotiation_margin_shift,
+        price_per_day, negotiation_margin_day,
+        price_fixed, negotiation_margin_fixed
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+      [
+        clinicId, name, description,
+        price_per_hour, negotiation_margin_hour,
+        price_per_shift, negotiation_margin_shift,
+        price_per_day, negotiation_margin_day,
+        price_fixed, negotiation_margin_fixed
+      ]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    next(error);
+  }
 });
 
 module.exports = router;
