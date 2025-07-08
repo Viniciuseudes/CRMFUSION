@@ -69,7 +69,8 @@ app.use("/api/goals", authenticateToken, goalRoutes);
 app.use("/api/activities", authenticateToken, activityRoutes);
 app.use("/api/reports", authenticateToken, reportRoutes);
 app.use("/api/contracts", authenticateToken, contractRoutes);
-app.use("/api/clinics", clinicsRouter);
+// A LINHA ABAIXO FOI CORRIGIDA
+app.use("/api/clinics", authenticateToken, clinicsRouter);
 app.use("/api/basex", authenticateToken, basexRoutes);
 
 // Error handling
