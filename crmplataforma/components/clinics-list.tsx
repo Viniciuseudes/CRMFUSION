@@ -78,6 +78,18 @@ export function ClinicsList() {
   const { user } = useAuth();
   const { toast } = useToast();
 
+  const [formData, setFormData] = useState({
+    name: "",
+    address: "",
+    numero: "",
+    ponto_referencia: "",
+    city: "",
+    state: "",
+    zip_code: "",
+    phone: "",
+    host_name: "",
+  });
+
   const fetchClinics = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -94,24 +106,60 @@ export function ClinicsList() {
     fetchClinics();
   }, [fetchClinics]);
 
+  const handleCEPChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const cep = e.target.value.replace(/\D/g, "");
+    setFormData((prev) => ({ ...prev, zip_code: cep }));
+
+    if (cep.length === 8) {
+      try {
+        const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+        const data = await response.json();
+        if (!data.erro) {
+          setFormData((prev) => ({
+            ...prev,
+            address: data.logradouro,
+            city: data.localidade,
+            state: data.uf,
+          }));
+        } else {
+          toast({ title: "CEP não encontrado", variant: "destructive" });
+        }
+      } catch (error) {
+        toast({ title: "Erro ao buscar CEP", variant: "destructive" });
+      }
+    }
+  };
+
+  const handleInputChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+  ) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleSelectChange = (name: string, value: string) => {
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
   const handleSaveClinic = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsSubmitting(true);
-    const formData = new FormData(e.currentTarget);
-    const clinicData = {
-      name: formData.get("name") as string,
-      address: formData.get("address") as string,
-      city: formData.get("city") as string,
-      state: formData.get("state") as string,
-      zip_code: formData.get("zip_code") as string,
-      phone: formData.get("phone") as string,
-      host_name: formData.get("host_name") as string,
-    };
 
     try {
-      await clinicsAPI.create(clinicData as any);
+      await clinicsAPI.create(formData as any);
       toast({ title: "Clínica criada com sucesso!" });
       setIsDialogOpen(false);
+      setFormData({
+        name: "",
+        address: "",
+        numero: "",
+        ponto_referencia: "",
+        city: "",
+        state: "",
+        zip_code: "",
+        phone: "",
+        host_name: "",
+      });
       await fetchClinics();
     } catch (error) {
       console.error("Erro ao salvar clinica", error);
@@ -144,7 +192,7 @@ export function ClinicsList() {
                 Nova Clínica
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-xl">
+            <DialogContent className="sm:max-w-2xl">
               <DialogHeader>
                 <DialogTitle>Adicionar Nova Clínica</DialogTitle>
                 <DialogDescription>
@@ -154,20 +202,75 @@ export function ClinicsList() {
               <form onSubmit={handleSaveClinic} className="grid gap-4 py-4">
                 <div className="space-y-2">
                   <Label htmlFor="name">Nome da Clínica</Label>
-                  <Input id="name" name="name" required />
+                  <Input
+                    id="name"
+                    name="name"
+                    value={formData.name}
+                    onChange={handleInputChange}
+                    required
+                  />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="address">Endereço</Label>
-                  <Input id="address" name="address" />
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-2 md:col-span-1">
+                    <Label htmlFor="zip_code">CEP</Label>
+                    <Input
+                      id="zip_code"
+                      name="zip_code"
+                      value={formData.zip_code}
+                      onChange={handleCEPChange}
+                    />
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <Label htmlFor="address">Endereço</Label>
+                    <Input
+                      id="address"
+                      name="address"
+                      value={formData.address}
+                      onChange={handleInputChange}
+                    />
+                  </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="space-y-2">
+                    <Label htmlFor="numero">Número</Label>
+                    <Input
+                      id="numero"
+                      name="numero"
+                      value={formData.numero}
+                      onChange={handleInputChange}
+                    />
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <Label htmlFor="ponto_referencia">
+                      Ponto de Referência
+                    </Label>
+                    <Input
+                      id="ponto_referencia"
+                      name="ponto_referencia"
+                      value={formData.ponto_referencia}
+                      onChange={handleInputChange}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
                     <Label htmlFor="city">Cidade</Label>
-                    <Input id="city" name="city" />
+                    <Input
+                      id="city"
+                      name="city"
+                      value={formData.city}
+                      onChange={handleInputChange}
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="state">Estado</Label>
-                    <Select name="state">
+                    <Select
+                      name="state"
+                      value={formData.state}
+                      onValueChange={(value) =>
+                        handleSelectChange("state", value)
+                      }
+                    >
                       <SelectTrigger>
                         <SelectValue placeholder="Selecione..." />
                       </SelectTrigger>
@@ -180,19 +283,25 @@ export function ClinicsList() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="zip_code">CEP</Label>
-                    <Input id="zip_code" name="zip_code" />
-                  </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="phone">Telefone</Label>
-                    <Input id="phone" name="phone" />
+                    <Input
+                      id="phone"
+                      name="phone"
+                      value={formData.phone}
+                      onChange={handleInputChange}
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="host_name">Nome do Anfitrião (Dono)</Label>
-                    <Input id="host_name" name="host_name" />
+                    <Input
+                      id="host_name"
+                      name="host_name"
+                      value={formData.host_name}
+                      onChange={handleInputChange}
+                    />
                   </div>
                 </div>
                 <DialogFooter>
