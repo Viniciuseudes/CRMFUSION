@@ -29,6 +29,13 @@ import {
   Info,
 } from "lucide-react";
 
+// --- COMPONENTE MOVIDO PARA FORA ---
+// Componente auxiliar para exibir badges booleanos
+const BooleanBadge = ({ value, text }: { value: boolean; text: string }) => (
+  <Badge variant={value ? "default" : "secondary"}>{text}</Badge>
+);
+// --- FIM DA CORREÇÃO ---
+
 export function BaseXBoard() {
   const [leads, setLeads] = useState<BaseXLead[]>([]);
   const [filteredLeads, setFilteredLeads] = useState<BaseXLead[]>([]);
@@ -93,10 +100,7 @@ export function BaseXBoard() {
     }
   };
 
-  const BooleanBadge = ({ value, text }: { value: boolean; text: string }) => (
-    <Badge variant={value ? "default" : "secondary"}>{text}</Badge>
-  );
-
+  // O restante do componente permanece o mesmo...
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
