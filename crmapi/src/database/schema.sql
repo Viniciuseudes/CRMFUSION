@@ -109,11 +109,13 @@ CREATE TABLE clinics (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     address VARCHAR(255),
+    numero VARCHAR(20),
+    ponto_referencia VARCHAR(255),
     city VARCHAR(100),
     state VARCHAR(2),
     zip_code VARCHAR(20),
     phone VARCHAR(20),
-    host_id INTEGER REFERENCES users(id) ON DELETE SET NULL, -- Anfitrião da clínica
+    host_name VARCHAR(255),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );

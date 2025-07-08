@@ -7,7 +7,6 @@ const router = express.Router();
 // GET /api/clinics - Listar todas as clínicas
 router.get("/", async (req, res, next) => {
   try {
-    // Query corrigida: Não faz mais JOIN com users, pois host_name é local.
     const result = await pool.query("SELECT * FROM clinics ORDER BY name");
     res.json(result.rows);
   } catch (error) {
@@ -19,7 +18,6 @@ router.get("/", async (req, res, next) => {
 router.get("/:id", async (req, res, next) => {
   try {
     const { id } = req.params;
-    // Query corrigida: Não faz mais JOIN com users.
     const clinicResult = await pool.query("SELECT * FROM clinics WHERE id = $1", [id]);
 
     if (clinicResult.rows.length === 0) {
@@ -39,13 +37,12 @@ router.get("/:id", async (req, res, next) => {
 // POST /api/clinics - Criar uma nova clínica (Apenas Admin e Gerente)
 router.post("/", requireRole(['admin', 'gerente']), async (req, res, next) => {
   try {
-    // Corrigido: Usa host_name do corpo da requisição.
-    const { name, address, city, state, zip_code, phone, host_name } = req.body;
+    const { name, address, numero, ponto_referencia, city, state, zip_code, phone, host_name } = req.body;
     
     const result = await pool.query(
-      // Corrigido: Insere na coluna host_name.
-      "INSERT INTO clinics (name, address, city, state, zip_code, phone, host_name) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *",
-      [name, address, city, state, zip_code, phone, host_name]
+      `INSERT INTO clinics (name, address, numero, ponto_referencia, city, state, zip_code, phone, host_name) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+      [name, address, numero, ponto_referencia, city, state, zip_code, phone, host_name]
     );
     res.status(201).json(result.rows[0]);
   } catch (error) {
