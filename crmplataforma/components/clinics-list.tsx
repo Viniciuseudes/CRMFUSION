@@ -1,8 +1,7 @@
-// crmplataforma/components/clinics-list.tsx
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { clinicsAPI, usersAPI, type Clinic, type User } from "@/lib/api-client";
+import { clinicsAPI, type Clinic } from "@/lib/api-client";
 import { useAuth } from "@/contexts/auth-context";
 import { Button } from "@/components/ui/button";
 import {
@@ -73,7 +72,6 @@ const brazilianStates = [
 
 export function ClinicsList() {
   const [clinics, setClinics] = useState<Clinic[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -81,35 +79,20 @@ export function ClinicsList() {
   const { toast } = useToast();
 
   const fetchClinics = useCallback(async () => {
+    setIsLoading(true);
     try {
       const data = await clinicsAPI.getAll();
       setClinics(data);
     } catch (error) {
       toast({ title: "Erro ao carregar clínicas", variant: "destructive" });
-    }
-  }, [toast]);
-
-  const fetchUsers = useCallback(async () => {
-    try {
-      const data = await usersAPI.getAll();
-      // Filtra para mostrar apenas admins e gerentes como possíveis anfitriões
-      const potentialHosts = data.users.filter(
-        (u) => u.role === "admin" || u.role === "gerente"
-      );
-      setUsers(potentialHosts);
-    } catch (error) {
-      toast({ title: "Erro ao carregar usuários", variant: "destructive" });
+    } finally {
+      setIsLoading(false);
     }
   }, [toast]);
 
   useEffect(() => {
-    const loadData = async () => {
-      setIsLoading(true);
-      await Promise.all([fetchClinics(), fetchUsers()]);
-      setIsLoading(false);
-    };
-    loadData();
-  }, [fetchClinics, fetchUsers]);
+    fetchClinics();
+  }, [fetchClinics]);
 
   const handleSaveClinic = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -122,16 +105,21 @@ export function ClinicsList() {
       state: formData.get("state") as string,
       zip_code: formData.get("zip_code") as string,
       phone: formData.get("phone") as string,
-      host_id: Number(formData.get("host_id")),
+      host_name: formData.get("host_name") as string,
     };
 
     try {
       await clinicsAPI.create(clinicData as any);
       toast({ title: "Clínica criada com sucesso!" });
       setIsDialogOpen(false);
-      await fetchClinics(); // Re-fetch para atualizar a lista
+      await fetchClinics();
     } catch (error) {
-      toast({ title: "Erro ao criar clínica", variant: "destructive" });
+      console.error("Erro ao salvar clinica", error);
+      toast({
+        title: "Erro ao criar clínica",
+        description: "Verifique os dados e tente novamente.",
+        variant: "destructive",
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -203,19 +191,8 @@ export function ClinicsList() {
                     <Input id="phone" name="phone" />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="host_id">Anfitrião Responsável</Label>
-                    <Select name="host_id">
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione um anfitrião..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {users.map((u) => (
-                          <SelectItem key={u.id} value={u.id}>
-                            {u.name} ({u.role})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Label htmlFor="host_name">Nome do Anfitrião (Dono)</Label>
+                    <Input id="host_name" name="host_name" />
                   </div>
                 </div>
                 <DialogFooter>
