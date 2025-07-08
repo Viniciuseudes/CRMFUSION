@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { clinicsAPI, type Clinic } from "@/lib/api-client";
 import { useAuth } from "@/contexts/auth-context";
 import { Button } from "@/components/ui/button";
@@ -77,6 +78,7 @@ export function ClinicsList() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { user } = useAuth();
   const { toast } = useToast();
+  const router = useRouter();
 
   const [formData, setFormData] = useState({
     name: "",
@@ -130,9 +132,7 @@ export function ClinicsList() {
     }
   };
 
-  const handleInputChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
-  ) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
@@ -144,7 +144,6 @@ export function ClinicsList() {
   const handleSaveClinic = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsSubmitting(true);
-
     try {
       await clinicsAPI.create(formData as any);
       toast({ title: "Clínica criada com sucesso!" });
@@ -199,7 +198,10 @@ export function ClinicsList() {
                   Preencha os dados abaixo para cadastrar uma nova clínica.
                 </DialogDescription>
               </DialogHeader>
-              <form onSubmit={handleSaveClinic} className="grid gap-4 py-4">
+              <form
+                onSubmit={handleSaveClinic}
+                className="grid gap-4 py-4 max-h-[70vh] overflow-y-auto pr-4"
+              >
                 <div className="space-y-2">
                   <Label htmlFor="name">Nome da Clínica</Label>
                   <Input
@@ -218,6 +220,7 @@ export function ClinicsList() {
                       name="zip_code"
                       value={formData.zip_code}
                       onChange={handleCEPChange}
+                      maxLength={9}
                     />
                   </div>
                   <div className="space-y-2 md:col-span-2">
@@ -329,7 +332,8 @@ export function ClinicsList() {
         <CardHeader>
           <CardTitle>Lista de Clínicas</CardTitle>
           <CardDescription>
-            Visualize todas as clínicas cadastradas.
+            Visualize todas as clínicas cadastradas. Clique em uma para ver os
+            detalhes.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -352,6 +356,7 @@ export function ClinicsList() {
                   <TableRow
                     key={clinic.id}
                     className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => router.push(`/clinics/${clinic.id}`)}
                   >
                     <TableCell className="font-medium">{clinic.name}</TableCell>
                     <TableCell>{clinic.host_name || "N/A"}</TableCell>

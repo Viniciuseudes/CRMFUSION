@@ -134,13 +134,15 @@ export interface Clinic {
   id: number;
   name: string;
   address?: string;
+  numero?: string;
+  ponto_referencia?: string;
   city?: string;
   state?: string;
   zip_code?: string;
   phone?: string;
   host_id?: number;
-  host_name?: string; // Vem do JOIN no backend
-  rooms?: Room[]; // As salas serão aninhadas aqui
+  host_name?: string;
+  rooms?: Room[];
 }
 export interface Goal {
   id: string; 
@@ -302,7 +304,6 @@ type CreateLeadData = Omit<Lead, "id" | "created_at" | "updated_at" | "assigned_
 type UpdateLeadData = Partial<Omit<Lead, "id" | "created_at" | "updated_at" | "assigned_to" | "assigned_to_name" | "entry_date" | "is_converted_client" | "client_id" | "is_standby">>;
 
 export const leadsAPI = {
-  // <<< FUNÇÃO MODIFICADA PARA ACEITAR PARÂMETROS >>>
   getAll: async (params?: { funnel?: string; standby?: boolean }): Promise<PaginatedLeadsResponse> => {
     const response = await apiClient.get("/leads", { params });
     return response.data;
@@ -323,7 +324,6 @@ export const leadsAPI = {
     return response.data;
   },
   
-  // <<< NOVA FUNÇÃO PARA ALTERAR O STATUS STAND-BY >>>
   setStandby: async (id: number, standby: boolean): Promise<Lead> => {
     const response = await apiClient.put(`/leads/${id}/standby`, { standby });
     return response.data;
@@ -542,7 +542,7 @@ export const clinicsAPI = {
     const response = await apiClient.get(`/clinics/${id}`);
     return response.data;
   },
-  create: async (clinicData: Omit<Clinic, 'id'>): Promise<Clinic> => {
+  create: async (clinicData: Omit<Clinic, 'id' | 'rooms'>): Promise<Clinic> => {
     const response = await apiClient.post("/clinics", clinicData);
     return response.data;
   },
@@ -563,7 +563,6 @@ export const basexAPI = {
     const response = await apiClient.post("/basex", data);
     return response.data;
   },
-  // --- FUNÇÃO NOVA ---
   updateMeetingStatus: async (id: number, status: BaseXLead['meeting_status']): Promise<BaseXLead> => {
     const response = await apiClient.put(`/basex/${id}/meeting`, { status });
     return response.data;
