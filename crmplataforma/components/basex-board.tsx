@@ -21,6 +21,11 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"; // <-- Importação adicionada
+import {
   Plus,
   Loader2,
   Search,
@@ -29,12 +34,10 @@ import {
   Info,
 } from "lucide-react";
 
-// --- COMPONENTE MOVIDO PARA FORA ---
 // Componente auxiliar para exibir badges booleanos
 const BooleanBadge = ({ value, text }: { value: boolean; text: string }) => (
   <Badge variant={value ? "default" : "secondary"}>{text}</Badge>
 );
-// --- FIM DA CORREÇÃO ---
 
 export function BaseXBoard() {
   const [leads, setLeads] = useState<BaseXLead[]>([]);
@@ -67,7 +70,8 @@ export function BaseXBoard() {
     const results = leads.filter(
       (lead) =>
         lead.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        lead.specialty.toLowerCase().includes(searchTerm.toLowerCase())
+        (lead.specialty &&
+          lead.specialty.toLowerCase().includes(searchTerm.toLowerCase()))
     );
     setFilteredLeads(results);
   }, [searchTerm, leads]);
@@ -100,7 +104,6 @@ export function BaseXBoard() {
     }
   };
 
-  // O restante do componente permanece o mesmo...
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -212,11 +215,29 @@ export function BaseXBoard() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {filteredLeads.map((lead) => (
-            <Card key={lead.id}>
+            <Card key={lead.id} className="flex flex-col">
               <CardHeader>
                 <CardTitle className="flex items-center justify-between">
                   <span className="text-lg">{lead.name}</span>
-                  <div className="flex gap-2">
+                  <div className="flex items-center gap-2">
+                    {/* --- INÍCIO DA MUDANÇA --- */}
+                    {lead.general_info && (
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                          >
+                            <Info className="h-4 w-4 text-blue-500" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent>
+                          <p className="text-sm">{lead.general_info}</p>
+                        </PopoverContent>
+                      </Popover>
+                    )}
+                    {/* --- FIM DA MUDANÇA --- */}
                     {lead.whatsapp && (
                       <MessageSquare className="h-4 w-4 text-green-500" />
                     )}
@@ -229,28 +250,24 @@ export function BaseXBoard() {
                   {lead.specialty}
                 </p>
               </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex flex-wrap gap-2">
-                  <BooleanBadge value={lead.is_accessible} text="Acessível" />
-                  <BooleanBadge
-                    value={lead.needs_room}
-                    text="Precisa de Sala"
-                  />
-                  <BooleanBadge
-                    value={lead.patient_demand}
-                    text="Tem Demanda"
-                  />
-                  <BooleanBadge
-                    value={lead.valid_council}
-                    text="Conselho Válido"
-                  />
-                </div>
-                {lead.general_info && (
-                  <div className="text-xs text-muted-foreground pt-2 border-t mt-2 flex items-start gap-2">
-                    <Info className="h-4 w-4 mt-0.5 shrink-0" />
-                    <p className="flex-1">{lead.general_info}</p>
+              <CardContent className="space-y-3 flex-grow flex flex-col justify-between">
+                <div>
+                  <div className="flex flex-wrap gap-2">
+                    <BooleanBadge value={lead.is_accessible} text="Acessível" />
+                    <BooleanBadge
+                      value={lead.needs_room}
+                      text="Precisa de Sala"
+                    />
+                    <BooleanBadge
+                      value={lead.patient_demand}
+                      text="Tem Demanda"
+                    />
+                    <BooleanBadge
+                      value={lead.valid_council}
+                      text="Conselho Válido"
+                    />
                   </div>
-                )}
+                </div>
                 <div className="text-xs text-gray-400 pt-2 border-t mt-2">
                   Adicionado por: {lead.created_by_name}
                 </div>
