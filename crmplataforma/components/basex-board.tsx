@@ -24,7 +24,7 @@ import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from "@/components/ui/popover"; // <-- Importação adicionada
+} from "@/components/ui/popover";
 import {
   Plus,
   Loader2,
@@ -32,7 +32,9 @@ import {
   MessageSquare,
   Instagram,
   Info,
+  Users,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 // Componente auxiliar para exibir badges booleanos
 const BooleanBadge = ({ value, text }: { value: boolean; text: string }) => (
@@ -101,6 +103,59 @@ export function BaseXBoard() {
       toast({ title: "Erro ao adicionar contato", variant: "destructive" });
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleMeetingStatusToggle = async (leadToUpdate: BaseXLead) => {
+    const currentStatus = leadToUpdate.meeting_status;
+    const nextStatus: BaseXLead["meeting_status"] =
+      currentStatus === "none"
+        ? "pending"
+        : currentStatus === "pending"
+        ? "confirmed"
+        : "none";
+
+    // Atualização otimista da UI
+    setLeads((prev) =>
+      prev.map((l) =>
+        l.id === leadToUpdate.id ? { ...l, meeting_status: nextStatus } : l
+      )
+    );
+
+    try {
+      await basexAPI.updateMeetingStatus(leadToUpdate.id, nextStatus);
+      toast({ title: `Status da reunião atualizado para: ${nextStatus}` });
+    } catch (error) {
+      // Reverte a UI em caso de erro
+      setLeads((prev) =>
+        prev.map((l) =>
+          l.id === leadToUpdate.id ? { ...l, meeting_status: currentStatus } : l
+        )
+      );
+      toast({ title: "Erro ao atualizar status", variant: "destructive" });
+    }
+  };
+
+  const formatWhatsAppLink = (phone?: string) => {
+    if (!phone) return "#";
+    const justDigits = phone.replace(/\D/g, "");
+    return `https://wa.me/55${justDigits}`;
+  };
+
+  const formatInstagramLink = (username?: string) => {
+    if (!username) return "#";
+    const handle = username.startsWith("@") ? username.substring(1) : username;
+    return `https://instagram.com/${handle}`;
+  };
+
+  const getMeetingButtonClass = (status: BaseXLead["meeting_status"]) => {
+    switch (status) {
+      case "pending":
+        return "bg-yellow-400 hover:bg-yellow-500 text-white";
+      case "confirmed":
+        return "bg-green-500 hover:bg-green-600 text-white";
+      default:
+        return "bg-gray-200 hover:bg-gray-300 text-gray-600";
     }
   };
 
@@ -217,10 +272,22 @@ export function BaseXBoard() {
           {filteredLeads.map((lead) => (
             <Card key={lead.id} className="flex flex-col">
               <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                  <span className="text-lg">{lead.name}</span>
-                  <div className="flex items-center gap-2">
-                    {/* --- INÍCIO DA MUDANÇA --- */}
+                <CardTitle className="flex items-start justify-between gap-2">
+                  <span className="text-lg break-words flex-1">
+                    {lead.name}
+                  </span>
+                  <div className="flex items-center shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className={cn(
+                        "h-6 w-6 rounded-full",
+                        getMeetingButtonClass(lead.meeting_status)
+                      )}
+                      onClick={() => handleMeetingStatusToggle(lead)}
+                    >
+                      <Users className="h-4 w-4" />
+                    </Button>
                     {lead.general_info && (
                       <Popover>
                         <PopoverTrigger asChild>
@@ -236,13 +303,6 @@ export function BaseXBoard() {
                           <p className="text-sm">{lead.general_info}</p>
                         </PopoverContent>
                       </Popover>
-                    )}
-                    {/* --- FIM DA MUDANÇA --- */}
-                    {lead.whatsapp && (
-                      <MessageSquare className="h-4 w-4 text-green-500" />
-                    )}
-                    {lead.instagram && (
-                      <Instagram className="h-4 w-4 text-pink-500" />
                     )}
                   </div>
                 </CardTitle>
@@ -266,6 +326,42 @@ export function BaseXBoard() {
                       value={lead.valid_council}
                       text="Conselho Válido"
                     />
+                  </div>
+                  <div className="flex items-center gap-2 mt-3 pt-3 border-t">
+                    {lead.whatsapp && (
+                      <Button
+                        asChild
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs px-2"
+                      >
+                        <a
+                          href={formatWhatsAppLink(lead.whatsapp)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <MessageSquare className="h-3 w-3 mr-1.5 text-green-500" />{" "}
+                          WhatsApp
+                        </a>
+                      </Button>
+                    )}
+                    {lead.instagram && (
+                      <Button
+                        asChild
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs px-2"
+                      >
+                        <a
+                          href={formatInstagramLink(lead.instagram)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <Instagram className="h-3 w-3 mr-1.5 text-pink-500" />{" "}
+                          Instagram
+                        </a>
+                      </Button>
+                    )}
                   </div>
                 </div>
                 <div className="text-xs text-gray-400 pt-2 border-t mt-2">

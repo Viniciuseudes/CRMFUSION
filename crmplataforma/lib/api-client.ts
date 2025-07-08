@@ -189,6 +189,7 @@ export interface BaseXLead {
   created_by: string;
   created_at: string;
   created_by_name: string;
+  meeting_status: 'none' | 'pending' | 'confirmed';
 }
 
 // --- INTERFACES PARA RESPOSTAS PAGINADAS ---
@@ -558,8 +559,13 @@ export const basexAPI = {
     const response = await apiClient.get("/basex");
     return response.data;
   },
-  create: async (data: Omit<BaseXLead, 'id' | 'created_at' | 'created_by' | 'created_by_name'>): Promise<BaseXLead> => {
+  create: async (data: Omit<BaseXLead, 'id' | 'created_at' | 'created_by' | 'created_by_name' | 'meeting_status'>): Promise<BaseXLead> => {
     const response = await apiClient.post("/basex", data);
+    return response.data;
+  },
+  // --- FUNÇÃO NOVA ---
+  updateMeetingStatus: async (id: number, status: BaseXLead['meeting_status']): Promise<BaseXLead> => {
+    const response = await apiClient.put(`/basex/${id}/meeting`, { status });
     return response.data;
   },
 };
