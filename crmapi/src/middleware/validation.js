@@ -39,7 +39,7 @@ const schemas = {
     permissions: Joi.array().items(Joi.string()).default([]),
   }),
 
-  // User schemas (sem mudanças)
+  // User schemas
   updateUser: Joi.object({
     name: Joi.string().min(2).max(255),
     email: Joi.string().email(),
@@ -48,7 +48,7 @@ const schemas = {
     is_active: Joi.boolean(),
   }),
 
-  // Lead schemas (sem mudanças)
+  // Lead schemas 
   createLead: Joi.object({
     name: Joi.string().min(2).max(255).required(),
     specialty: Joi.string().min(2).max(255).required(),
@@ -77,7 +77,7 @@ const schemas = {
     state: Joi.string().length(2).allow(null, ''),
   }),
 
-  // Client schemas (sem mudanças)
+  // Client schemas 
   createClient: Joi.object({
     name: Joi.string().min(2).max(255).required(),
     phone: Joi.string().min(10).max(20).required(),
@@ -138,7 +138,7 @@ const schemas = {
     is_active: Joi.boolean(),
   }),
 
-  // Activity schemas (sem mudanças)
+  // Activity schemas
   createActivity: Joi.object({
     lead_id: Joi.number().integer().allow(null),
     client_id: Joi.number().integer().allow(null),
@@ -172,6 +172,20 @@ const schemas = {
 updateContractStatus: Joi.object({
   status: Joi.string().valid('ativo', 'expirado', 'cancelado').required(),
 }),
+
+  createBaseXLead: Joi.object({
+    name: Joi.string().min(2).max(255).required(),
+    specialty: Joi.string().max(255).allow(null, ''),
+    whatsapp: Joi.string().max(50).allow(null, ''),
+    instagram: Joi.string().max(100).allow(null, ''),
+    is_accessible: Joi.boolean().default(false),
+    needs_room: Joi.boolean().default(false),
+    patient_demand: Joi.boolean().default(false),
+    valid_council: Joi.boolean().default(false),
+    general_info: Joi.string().allow(null, ''),
+  }),
+
+
 }
 
 module.exports = {
