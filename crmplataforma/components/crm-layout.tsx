@@ -33,7 +33,8 @@ import {
   Home,
   LineChart,
   FileText,
-  Database, // Certifique-se que o ícone Database está importado
+  Database,
+  Building, // Usando um ícone diferente para Clínicas para evitar repetição
 } from "lucide-react";
 
 interface CRMLayoutProps {
@@ -69,7 +70,7 @@ export function CRMLayout({ children }: CRMLayoutProps) {
     { name: "Leads", href: "/leads", icon: UserPlus },
     { name: "BaseX", href: "/basex", icon: Database },
     { name: "Clientes", href: "/clients", icon: Users },
-    { name: "Clinicas", href: "/clinics", icon: Home },
+    { name: "Clinicas", href: "/clinics", icon: Building },
     { name: "Relatórios", href: "/reports", icon: BarChart3 },
     { name: "Metas", href: "/goals", icon: Target },
     { name: "Equipe", href: "/team", icon: Users },
@@ -83,12 +84,18 @@ export function CRMLayout({ children }: CRMLayoutProps) {
 
     // --- INÍCIO DA CORREÇÃO ---
     if (user.role === "colaborador") {
-      // Apenas "Clinicas" e "BaseX" serão visíveis para colaboradores
-      const allowedHrefs = ["/clinics", "/basex"];
+      const allowedHrefs = [
+        "/leads",
+        "/clients",
+        "/basex",
+        "/clinics",
+        "/goals",
+      ];
       return navigation.filter((item) => allowedHrefs.includes(item.href));
     }
     // --- FIM DA CORREÇÃO ---
 
+    // Para admin e gerente, mostra tudo (ou a lógica que preferir)
     return navigation;
   };
 
