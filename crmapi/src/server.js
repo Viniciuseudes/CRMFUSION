@@ -18,6 +18,7 @@ const { errorHandler } = require("./middleware/errorHandler")
 const { authenticateToken } = require("./middleware/auth")
 const contractRoutes = require("./routes/contracts");
 const basexRoutes = require("./routes/basex");
+const roomRoutes = require("./routes/rooms");
 
 const app = express()
 const PORT = process.env.PORT || 3001
@@ -69,8 +70,8 @@ app.use("/api/goals", authenticateToken, goalRoutes);
 app.use("/api/activities", authenticateToken, activityRoutes);
 app.use("/api/reports", authenticateToken, reportRoutes);
 app.use("/api/contracts", authenticateToken, contractRoutes);
-// A LINHA ABAIXO FOI CORRIGIDA
 app.use("/api/clinics", authenticateToken, clinicsRouter);
+app.use("/api/rooms", authenticateToken, roomRoutes);
 app.use("/api/basex", authenticateToken, basexRoutes);
 
 // Error handling
