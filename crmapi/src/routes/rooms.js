@@ -5,8 +5,7 @@ const { createClient } = require('@supabase/supabase-js');
 
 const router = express.Router();
 
-// Inicialize o cliente do Supabase com as variáveis de ambiente
-// Certifique-se de que estas variáveis estão no seu arquivo .env
+// Assegure-se que estas variáveis estão no seu arquivo .env na Render
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
@@ -21,7 +20,8 @@ router.post('/:id/upload-url', requireRole(['admin', 'gerente']), async (req, re
             return res.status(400).json({ error: 'Nome e tipo do arquivo são obrigatórios.' });
         }
 
-        const filePath = `public/${id}/${fileName}`;
+        // Define um caminho único para o arquivo para evitar conflitos
+        const filePath = `public/${id}/${Date.now()}-${fileName}`;
 
         const { data, error } = await supabase
             .storage
@@ -43,14 +43,19 @@ router.post('/:id/upload-url', requireRole(['admin', 'gerente']), async (req, re
 router.put('/:id/image', requireRole(['admin', 'gerente']), async (req, res, next) => {
     try {
         const { id } = req.params;
-        const { imageUrl } = req.body;
+        const { imagePath } = req.body; // Alterado de imageUrl para imagePath
 
-        if (!imageUrl) {
-            return res.status(400).json({ error: 'URL da imagem é obrigatória.' });
+        if (!imagePath) {
+            return res.status(400).json({ error: 'O caminho da imagem é obrigatório.' });
         }
+        
+        // Monta a URL pública final usando o 'path' retornado pelo Supabase
+        const { data } = supabase
+            .storage
+            .from('room-images') // Nome do seu bucket
+            .getPublicUrl(imagePath);
 
-        // Construir a URL pública final
-        const publicUrl = `${supabaseUrl}/storage/v1/object/public/room-images/${imageUrl}`;
+        const publicUrl = data.publicUrl;
 
         const result = await pool.query(
             'UPDATE rooms SET image_url = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
@@ -67,6 +72,5 @@ router.put('/:id/image', requireRole(['admin', 'gerente']), async (req, res, nex
         next(error);
     }
 });
-
 
 module.exports = router;
