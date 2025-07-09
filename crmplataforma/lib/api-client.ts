@@ -128,6 +128,7 @@ export interface Room {
   negotiation_margin_day: number;
   price_fixed: number;
   negotiation_margin_fixed: number;
+  image_url?: string;
 }
 
 export interface Clinic {
@@ -554,12 +555,15 @@ export const clinicsAPI = {
 };
 
 export const roomsAPI = {
-  createSignedUploadUrl: async (roomId: number, fileName: string, fileType: string): Promise<{ path: string; token: string; signedURL: string; }> => {
+  createSignedUploadUrl: async (roomId: number, fileName: string, fileType: string): Promise<{ path: string; token: string; signedUrl: string; }> => {
       const response = await apiClient.post(`/rooms/${roomId}/upload-url`, { fileName, fileType });
-      return response.data;
+      // Na API Vercel, o 'signedUrl' já vem no corpo da resposta
+      // Se sua API estiver retornando diferente, ajuste aqui.
+      // Ex: se a API retorna { data: { signedUrl: '...' } }, use response.data.data
+      return response.data; 
   },
-  updateImageUrl: async (roomId: number, imageUrl: string): Promise<Room> => {
-      const response = await apiClient.put(`/rooms/${roomId}/image`, { imageUrl });
+  updateImageUrl: async (roomId: number, imagePath: string): Promise<Room> => {
+      const response = await apiClient.put(`/rooms/${roomId}/image`, { imagePath });
       return response.data;
   },
 };
