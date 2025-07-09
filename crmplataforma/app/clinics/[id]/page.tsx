@@ -188,14 +188,18 @@ function ClinicDetailsPage() {
         selectedFile.type
       );
 
-      // 2. Fazer o upload do arquivo para a URL recebida
-      await fetch(signedURL, {
+      // 2. Fazer o upload do arquivo para a URL recebida do Supabase
+      const uploadResponse = await fetch(signedURL, {
         method: "PUT",
         headers: { "Content-Type": selectedFile.type },
         body: selectedFile,
       });
 
-      // 3. Atualizar o banco de dados com o caminho do arquivo
+      if (!uploadResponse.ok) {
+        throw new Error("Falha no upload para o Supabase Storage");
+      }
+
+      // 3. Informar nosso backend que o upload foi um sucesso, enviando o 'path'
       await roomsAPI.updateImageUrl(selectedRoomId, path);
 
       toast({ title: "Imagem enviada com sucesso!" });
@@ -203,7 +207,11 @@ function ClinicDetailsPage() {
       setIsImageUploadOpen(false);
     } catch (error) {
       console.error("Erro no upload:", error);
-      toast({ title: "Erro ao enviar imagem", variant: "destructive" });
+      toast({
+        title: "Erro ao enviar imagem",
+        description: "Verifique o console para mais detalhes.",
+        variant: "destructive",
+      });
     } finally {
       setIsSubmitting(false);
     }
