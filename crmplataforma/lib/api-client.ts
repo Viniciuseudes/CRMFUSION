@@ -553,6 +553,16 @@ export const clinicsAPI = {
 
 };
 
+export const roomsAPI = {
+  createSignedUploadUrl: async (roomId: number, fileName: string, fileType: string): Promise<{ path: string; token: string; signedURL: string; }> => {
+      const response = await apiClient.post(`/rooms/${roomId}/upload-url`, { fileName, fileType });
+      return response.data;
+  },
+  updateImageUrl: async (roomId: number, imageUrl: string): Promise<Room> => {
+      const response = await apiClient.put(`/rooms/${roomId}/image`, { imageUrl });
+      return response.data;
+  },
+};
 
 export const basexAPI = {
   getAll: async (): Promise<BaseXLead[]> => {

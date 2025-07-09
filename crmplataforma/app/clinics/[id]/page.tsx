@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { clinicsAPI, type Clinic, type Room } from "@/lib/api-client";
+import { clinicsAPI, roomsAPI, type Clinic, type Room } from "@/lib/api-client";
 import { useAuth } from "@/contexts/auth-context";
 import { CRMLayout } from "@/components/crm-layout";
 import {
@@ -23,6 +23,8 @@ import {
   MapPin,
   Phone,
   User,
+  Upload,
+  Image as ImageIcon,
 } from "lucide-react";
 import {
   Dialog,
@@ -35,6 +37,67 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import Image from "next/image";
+
+function RoomCard({
+  room,
+  onImageUpload,
+  canManage,
+}: {
+  room: Room;
+  onImageUpload: (roomId: number) => void;
+  canManage: boolean;
+}) {
+  return (
+    <Card
+      key={room.id}
+      className="flex flex-col justify-between overflow-hidden"
+    >
+      {room.image_url ? (
+        <div className="relative h-40 w-full">
+          <Image
+            src={room.image_url}
+            alt={room.name}
+            layout="fill"
+            objectFit="cover"
+          />
+        </div>
+      ) : (
+        <div className="flex h-40 w-full items-center justify-center bg-muted">
+          <ImageIcon className="h-12 w-12 text-gray-400" />
+        </div>
+      )}
+      <div className="p-4">
+        <div className="flex items-center justify-between gap-3 mb-2">
+          <h3 className="font-semibold">{room.name}</h3>
+          {canManage && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => onImageUpload(room.id)}
+            >
+              <Upload className="h-4 w-4 mr-2" />
+              Foto
+            </Button>
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground mb-2 h-10">
+          {room.description}
+        </p>
+        <div className="text-xs mt-4 space-y-1 border-t pt-2">
+          <p>
+            <strong>Hora:</strong> R$ {room.price_per_hour} (+/-{" "}
+            {room.negotiation_margin_hour}%)
+          </p>
+          <p>
+            <strong>Turno:</strong> R$ {room.price_per_shift} (+/-{" "}
+            {room.negotiation_margin_shift}%)
+          </p>
+        </div>
+      </div>
+    </Card>
+  );
+}
 
 function ClinicDetailsPage() {
   const params = useParams();
@@ -47,6 +110,9 @@ function ClinicDetailsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRoomDialogOpen, setIsRoomDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isImageUploadOpen, setIsImageUploadOpen] = useState(false);
+  const [selectedRoomId, setSelectedRoomId] = useState<number | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   const fetchClinicDetails = useCallback(async () => {
     if (!clinicId) return;
@@ -96,9 +162,48 @@ function ClinicDetailsPage() {
       await clinicsAPI.createRoom(clinic.id, roomData as any);
       toast({ title: "Sala adicionada com sucesso!" });
       setIsRoomDialogOpen(false);
-      fetchClinicDetails(); // Recarrega os dados para mostrar a nova sala
+      fetchClinicDetails();
     } catch (error) {
       toast({ title: "Erro ao adicionar sala", variant: "destructive" });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleImageUploadDialog = (roomId: number) => {
+    setSelectedRoomId(roomId);
+    setIsImageUploadOpen(true);
+    setSelectedFile(null);
+  };
+
+  const handleUploadImage = async () => {
+    if (!selectedFile || !selectedRoomId) return;
+
+    setIsSubmitting(true);
+    try {
+      // 1. Obter a URL de upload assinada do backend
+      const { signedURL, path } = await roomsAPI.createSignedUploadUrl(
+        selectedRoomId,
+        selectedFile.name,
+        selectedFile.type
+      );
+
+      // 2. Fazer o upload do arquivo para a URL recebida
+      await fetch(signedURL, {
+        method: "PUT",
+        headers: { "Content-Type": selectedFile.type },
+        body: selectedFile,
+      });
+
+      // 3. Atualizar o banco de dados com o caminho do arquivo
+      await roomsAPI.updateImageUrl(selectedRoomId, path);
+
+      toast({ title: "Imagem enviada com sucesso!" });
+      fetchClinicDetails();
+      setIsImageUploadOpen(false);
+    } catch (error) {
+      console.error("Erro no upload:", error);
+      toast({ title: "Erro ao enviar imagem", variant: "destructive" });
     } finally {
       setIsSubmitting(false);
     }
@@ -198,12 +303,12 @@ function ClinicDetailsPage() {
                     className="grid gap-4 py-4 max-h-[70vh] overflow-y-auto pr-4"
                   >
                     <div className="space-y-2">
-                      <Label htmlFor="name">Nome da Sala</Label>
-                      <Input id="name" name="name" required />
+                      <Label>Nome da Sala</Label>
+                      <Input name="name" required />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="description">Descrição</Label>
-                      <Textarea id="description" name="description" />
+                      <Label>Descrição</Label>
+                      <Textarea name="description" />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
@@ -212,6 +317,7 @@ function ClinicDetailsPage() {
                           name="price_per_hour"
                           type="number"
                           step="0.01"
+                          defaultValue={0}
                         />
                       </div>
                       <div className="space-y-2">
@@ -220,6 +326,7 @@ function ClinicDetailsPage() {
                           name="negotiation_margin_hour"
                           type="number"
                           step="0.01"
+                          defaultValue={0}
                         />
                       </div>
                       <div className="space-y-2">
@@ -228,6 +335,7 @@ function ClinicDetailsPage() {
                           name="price_per_shift"
                           type="number"
                           step="0.01"
+                          defaultValue={0}
                         />
                       </div>
                       <div className="space-y-2">
@@ -236,11 +344,17 @@ function ClinicDetailsPage() {
                           name="negotiation_margin_shift"
                           type="number"
                           step="0.01"
+                          defaultValue={0}
                         />
                       </div>
                       <div className="space-y-2">
                         <Label>Preço/Dia</Label>
-                        <Input name="price_per_day" type="number" step="0.01" />
+                        <Input
+                          name="price_per_day"
+                          type="number"
+                          step="0.01"
+                          defaultValue={0}
+                        />
                       </div>
                       <div className="space-y-2">
                         <Label>Margem Dia (%)</Label>
@@ -248,11 +362,17 @@ function ClinicDetailsPage() {
                           name="negotiation_margin_day"
                           type="number"
                           step="0.01"
+                          defaultValue={0}
                         />
                       </div>
                       <div className="space-y-2">
                         <Label>Preço Fixo</Label>
-                        <Input name="price_fixed" type="number" step="0.01" />
+                        <Input
+                          name="price_fixed"
+                          type="number"
+                          step="0.01"
+                          defaultValue={0}
+                        />
                       </div>
                       <div className="space-y-2">
                         <Label>Margem Fixo (%)</Label>
@@ -260,6 +380,7 @@ function ClinicDetailsPage() {
                           name="negotiation_margin_fixed"
                           type="number"
                           step="0.01"
+                          defaultValue={0}
                         />
                       </div>
                     </div>
@@ -287,38 +408,12 @@ function ClinicDetailsPage() {
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
               {clinic.rooms && clinic.rooms.length > 0 ? (
                 clinic.rooms.map((room) => (
-                  <Card
+                  <RoomCard
                     key={room.id}
-                    className="p-4 flex flex-col justify-between"
-                  >
-                    <div>
-                      <div className="flex items-center gap-3 mb-2">
-                        <BedDouble className="h-5 w-5 text-primary" />
-                        <h3 className="font-semibold">{room.name}</h3>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        {room.description}
-                      </p>
-                    </div>
-                    <div className="text-xs mt-4 space-y-1 border-t pt-2">
-                      <p>
-                        <strong>Hora:</strong> R$ {room.price_per_hour} (+/-{" "}
-                        {room.negotiation_margin_hour}%)
-                      </p>
-                      <p>
-                        <strong>Turno:</strong> R$ {room.price_per_shift} (+/-{" "}
-                        {room.negotiation_margin_shift}%)
-                      </p>
-                      <p>
-                        <strong>Dia:</strong> R$ {room.price_per_day} (+/-{" "}
-                        {room.negotiation_margin_day}%)
-                      </p>
-                      <p>
-                        <strong>Fixo:</strong> R$ {room.price_fixed} (+/-{" "}
-                        {room.negotiation_margin_fixed}%)
-                      </p>
-                    </div>
-                  </Card>
+                    room={room}
+                    onImageUpload={handleImageUploadDialog}
+                    canManage={canManage}
+                  />
                 ))
               ) : (
                 <p className="col-span-full text-center text-muted-foreground py-8">
@@ -328,6 +423,42 @@ function ClinicDetailsPage() {
             </div>
           </CardContent>
         </Card>
+
+        <Dialog open={isImageUploadOpen} onOpenChange={setIsImageUploadOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Enviar Imagem da Sala</DialogTitle>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <Label htmlFor="picture">Selecione a imagem</Label>
+              <Input
+                id="picture"
+                type="file"
+                onChange={(e) =>
+                  setSelectedFile(e.target.files ? e.target.files[0] : null)
+                }
+                accept="image/*"
+              />
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setIsImageUploadOpen(false)}
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={handleUploadImage}
+                disabled={!selectedFile || isSubmitting}
+              >
+                {isSubmitting && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
+                Enviar
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </CRMLayout>
   );
