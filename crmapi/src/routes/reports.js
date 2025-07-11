@@ -642,7 +642,70 @@ router.get("/purchase-history", async (req, res, next) => {
       revenue: parseFloat(row.total_value)
     })));
 
+
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ROTA NOVA: Retorna o MRR (Receita Mensal Recorrente) baseado em contratos ativos.
+router.get("/mrr-contracts", async (req, res, next) => {
+  try {
+    let query = `
+      SELECT COALESCE(SUM(monthly_value), 0) as current_mrr
+      FROM contracts
+      WHERE status = 'ativo' AND CURRENT_DATE BETWEEN start_date AND end_date
+    `;
+    const params = [];
+
+    if (req.user.role !== 'admin' && req.user.role !== 'gerente') {
+      // Se for colaborador, pode ser necessário filtrar por clientes atribuídos a ele.
+      // Esta lógica depende de como os contratos são atribuídos. Assumindo que o acesso é restrito.
+      query += ` AND created_by = $1`;
+      params.push(req.user.id);
+    }
+
+    const result = await pool.query(query, params);
+    res.json(result.rows[0]);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ROTA NOVA: Retorna as vendas detalhadas para um mês específico.
+router.get("/monthly-sales", async (req, res, next) => {
+  try {
+    const { month } = req.query; // Formato esperado: 'YYYY-MM'
+
+    if (!month || !/^\d{4}-\d{2}$/.test(month)) {
+      return res.status(400).json({ error: "Formato de mês inválido. Use YYYY-MM." });
+    }
+
+    const startDate = `${month}-01`;
+    const endDate = new Date(new Date(startDate).setMonth(new Date(startDate).getMonth() + 1)).toISOString().split('T')[0];
+
+    const query = `
+      SELECT
+        client_id,
+        c.name as client_name,
+        SUM(
+            COALESCE(
+                (regexp_matches(a.description, 'R\\$ ([0-9,.]+)'))[1],
+                '0'
+            )::NUMERIC
+        ) as total_spent_in_month
+      FROM activities a
+      JOIN clients c ON a.client_id = c.id
+      WHERE a.type = 'note'
+        AND a.description LIKE 'Nova compra registrada no valor de R$%'
+        AND a.date >= $1 AND a.date < $2
+      GROUP BY a.client_id, c.name
+      ORDER BY total_spent_in_month DESC;
+    `;
     
+    const result = await pool.query(query, [startDate, endDate]);
+
+    res.json(result.rows);
   } catch (error) {
     next(error);
   }
