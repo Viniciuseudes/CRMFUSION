@@ -368,7 +368,7 @@ export function ClientAnalyticsDashboard() {
         <TabsContent value="revenue-trends" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>MRR Mensal (Receita Média Recorrente)</CardTitle>
+              <CardTitle>Receita reservas</CardTitle>
               <CardDescription>
                 Variação mensal da receita recorrente.
               </CardDescription>

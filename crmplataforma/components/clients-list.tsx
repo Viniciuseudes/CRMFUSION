@@ -119,6 +119,13 @@ export function ClientsList() {
     null
   );
 
+  // Função auxiliar para corrigir o problema de fuso horário
+  const formatDateWithoutTimezoneShift = (dateString: string) => {
+    if (!dateString) return "N/A";
+    const [year, month, day] = dateString.split("T")[0].split("-").map(Number);
+    return new Date(year, month - 1, day).toLocaleDateString("pt-BR");
+  };
+
   // Efeito para criar um "atraso" (debounce) na busca.
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -396,9 +403,7 @@ export function ClientsList() {
                     <TableCell>
                       <div className="flex items-center gap-1">
                         <Calendar className="h-4 w-4 text-muted-foreground" />
-                        {new Date(client.last_purchase).toLocaleDateString(
-                          "pt-BR"
-                        )}
+                        {formatDateWithoutTimezoneShift(client.last_purchase)}
                         {needsReactivation(client.last_purchase) && (
                           <AlertCircle className="h-4 w-4 text-red-500 ml-1" />
                         )}
