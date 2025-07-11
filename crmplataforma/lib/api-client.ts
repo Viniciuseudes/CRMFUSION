@@ -510,6 +510,11 @@ export const reportsAPI = {
     return response.data;
   },
 
+  getPurchaseHistory: async (): Promise<{ month: string, revenue: number }[]> => {
+    const response = await apiClient.get("/reports/purchase-history");
+    return response.data;
+  },
+
   exportData: async (): Promise<any> => {
     const response = await apiClient.get("/reports/export");
     return response.data;

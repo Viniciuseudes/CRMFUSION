@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useAuth } from "@/contexts/auth-context";
 import { reportsAPI } from "@/lib/api-client";
 import {
   Card,
@@ -52,7 +51,7 @@ import {
   LineChart,
   Line,
 } from "recharts";
-import { format, parseISO } from "date-fns";
+import { format, parseISO, startOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 const COLORS = [
@@ -74,30 +73,26 @@ export function ClientAnalyticsDashboard() {
   // States para os dados dos relatórios
   const [specialtyData, setSpecialtyData] = useState<any[]>([]);
   const [ltvData, setLtvData] = useState<any>(null);
-  const [mrrData, setMrrData] = useState<any>(null);
   const [clientsByState, setClientsByState] = useState<any[]>([]);
+  const [purchaseHistory, setPurchaseHistory] = useState<any[]>([]);
 
   const fetchClientReports = useCallback(async (currentPeriod: string) => {
     setIsLoading(true);
     try {
-      let mrrMonths =
-        currentPeriod === "all"
-          ? "12"
-          : Math.ceil(Number(currentPeriod) / 30).toString();
-
       const results = await Promise.allSettled([
         reportsAPI.getClientSpecialtyAnalysis({ period: currentPeriod }),
         reportsAPI.getLtvAnalysis({ period: currentPeriod }),
-        reportsAPI.getMrrAnalysis({ months: mrrMonths }),
         reportsAPI.getClientsByState(),
+        reportsAPI.getPurchaseHistory(),
       ]);
 
       if (results[0].status === "fulfilled")
         setSpecialtyData(results[0].value || []);
       if (results[1].status === "fulfilled") setLtvData(results[1].value);
-      if (results[2].status === "fulfilled") setMrrData(results[2].value);
+      if (results[2].status === "fulfilled")
+        setClientsByState(results[2].value || []);
       if (results[3].status === "fulfilled")
-        setClientsByState(results[3].value || []);
+        setPurchaseHistory(results[3].value || []);
     } catch (error) {
       console.error("Erro geral ao carregar relatórios de clientes:", error);
     } finally {
@@ -207,14 +202,25 @@ export function ClientAnalyticsDashboard() {
               <CardContent>
                 <div className="text-2xl font-bold">
                   R${" "}
-                  {mrrData?.averageMRR?.toLocaleString("pt-BR", {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  }) || "0,00"}
+                  {purchaseHistory.reduce(
+                    (acc, item) => acc + item.revenue,
+                    0
+                  ) /
+                    purchaseHistory.length >
+                  0
+                    ? (
+                        purchaseHistory.reduce(
+                          (acc, item) => acc + item.revenue,
+                          0
+                        ) / purchaseHistory.length
+                      ).toLocaleString("pt-BR", {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })
+                    : "0,00"}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Receita Média Recorrente (últimos{" "}
-                  {mrrData?.calculatedOverMonths || 0} meses)
+                  Receita Média (período exibido no gráfico)
                 </p>
               </CardContent>
             </Card>
@@ -245,7 +251,6 @@ export function ClientAnalyticsDashboard() {
                   />
                   <Tooltip
                     formatter={(value: number) => [
-                      // Corrigido para number
                       `R$ ${value.toLocaleString("pt-BR")}`,
                       "Receita Total",
                     ]}
@@ -291,7 +296,6 @@ export function ClientAnalyticsDashboard() {
                   </Pie>
                   <Tooltip
                     formatter={(value: number, name, props) => [
-                      // Corrigido para number
                       `${value} clientes`,
                       props.payload.specialty,
                     ]}
@@ -321,7 +325,6 @@ export function ClientAnalyticsDashboard() {
                   />
                   <Tooltip
                     formatter={(value: number) => [
-                      // Corrigido para number
                       `R$ ${value.toLocaleString("pt-BR")}`,
                       "Receita Total",
                     ]}
@@ -346,7 +349,6 @@ export function ClientAnalyticsDashboard() {
               </CardDescription>
             </CardHeader>
             <CardContent className="pl-2">
-              {/* --- INÍCIO DA CORREÇÃO DO GRÁFICO --- */}
               <ResponsiveContainer width="100%" height={400}>
                 <BarChart
                   data={clientsByState}
@@ -360,7 +362,6 @@ export function ClientAnalyticsDashboard() {
                   <Bar dataKey="clients" name="Nº de Clientes" fill="#8884d8" />
                 </BarChart>
               </ResponsiveContainer>
-              {/* --- FIM DA CORREÇÃO DO GRÁFICO --- */}
             </CardContent>
           </Card>
         </TabsContent>
@@ -368,14 +369,20 @@ export function ClientAnalyticsDashboard() {
         <TabsContent value="revenue-trends" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Receita reservas</CardTitle>
+              <CardTitle>Receita das Reservas</CardTitle>
               <CardDescription>
-                Variação mensal da receita recorrente.
+                Soma de todas as compras adicionadas por mês.
               </CardDescription>
             </CardHeader>
             <CardContent className="pl-2">
               <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={mrrData?.monthlyRevenue || []}>
+                <LineChart
+                  data={(purchaseHistory || []).filter((item) => {
+                    const itemDate = startOfMonth(parseISO(`${item.month}-01`));
+                    const filterDate = new Date("2025-07-01");
+                    return itemDate >= filterDate;
+                  })}
+                >
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis
                     dataKey="month"
@@ -395,15 +402,27 @@ export function ClientAnalyticsDashboard() {
                       `R$ ${value.toLocaleString("pt-BR")}`,
                       "Receita",
                     ]}
-                    labelFormatter={(
-                      label: string // Corrigido para string
-                    ) =>
+                    labelFormatter={(label: string) =>
                       format(parseISO(`${label}-01`), "MMMM de yyyy", {
                         locale: ptBR,
                       })
                     }
                   />
-                  <Legend />
+                  <Legend
+                    verticalAlign="top"
+                    height={36}
+                    content={
+                      <div className="flex justify-center items-center mt-2">
+                        <div
+                          className="w-3 h-3 rounded-full mr-2"
+                          style={{ backgroundColor: COLORS[2] }}
+                        ></div>
+                        <span className="text-sm">
+                          Receita Mensal das Reservas
+                        </span>
+                      </div>
+                    }
+                  />
                   <Line
                     type="monotone"
                     dataKey="revenue"
