@@ -619,4 +619,35 @@ router.get("/leads-by-state", async (req, res, next) => {
   }
 });
 
+router.get("/purchase-history", async (req, res, next) => {
+  try {
+    // Esta query busca nas atividades, encontra as notas de compra,
+    // extrai o valor numérico e soma por mês.
+    const query = `
+      SELECT
+        TO_CHAR(date_trunc('month', date), 'YYYY-MM') as month,
+        SUM(
+          COALESCE(
+            (regexp_matches(description, 'R\\$ ([0-9,.]+)'))[1],
+            '0'
+          )::NUMERIC
+        ) as total_value
+      FROM activities
+      WHERE type = 'note' AND description LIKE 'Nova compra registrada no valor de R$%'
+      GROUP BY month
+      ORDER BY month ASC;
+    `;
+
+    const result = await pool.query(query);
+
+    res.json(result.rows.map(row => ({
+      month: row.month,
+      revenue: parseFloat(row.total_value) // Mantendo a chave 'revenue' para compatibilidade com o gráfico
+    })));
+
+  } catch (error) {
+    next(error);
+  }
+});
+
 module.exports = router
