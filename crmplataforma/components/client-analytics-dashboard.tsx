@@ -10,14 +10,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -32,9 +26,8 @@ import {
   DollarSign,
   Clock,
   Loader2,
-  PieChartIcon,
-  LineChartIcon,
   MapPin,
+  CalendarDays,
 } from "lucide-react";
 import {
   BarChart,
@@ -48,10 +41,8 @@ import {
   Pie,
   Cell,
   Legend,
-  LineChart,
-  Line,
 } from "recharts";
-import { format, parseISO, startOfMonth } from "date-fns";
+import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 const COLORS = [
@@ -66,43 +57,62 @@ const COLORS = [
   "#f97316",
 ];
 
+type MonthlySale = {
+  client_id: number;
+  client_name: string;
+  total_spent_in_month: number;
+};
+
 export function ClientAnalyticsDashboard() {
-  const [period, setPeriod] = useState("all");
   const [isLoading, setIsLoading] = useState(true);
 
-  // States para os dados dos relatórios
-  const [specialtyData, setSpecialtyData] = useState<any[]>([]);
+  // States para todos os dados dos relatórios
   const [ltvData, setLtvData] = useState<any>(null);
+  const [mrrData, setMrrData] = useState<any>(null);
+  const [specialtyData, setSpecialtyData] = useState<any[]>([]);
   const [clientsByState, setClientsByState] = useState<any[]>([]);
-  const [purchaseHistory, setPurchaseHistory] = useState<any[]>([]);
+  const [monthlySales, setMonthlySales] = useState<MonthlySale[]>([]);
 
-  const fetchClientReports = useCallback(async (currentPeriod: string) => {
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [isSalesLoading, setIsSalesLoading] = useState(false);
+
+  const fetchAllReports = useCallback(async () => {
     setIsLoading(true);
     try {
-      const results = await Promise.allSettled([
-        reportsAPI.getClientSpecialtyAnalysis({ period: currentPeriod }),
-        reportsAPI.getLtvAnalysis({ period: currentPeriod }),
+      const [ltv, mrr, specialty, byState] = await Promise.all([
+        reportsAPI.getLtvAnalysis({ period: "all" }),
+        reportsAPI.getContractsMrr(),
+        reportsAPI.getClientSpecialtyAnalysis({ period: "all" }),
         reportsAPI.getClientsByState(),
-        reportsAPI.getPurchaseHistory(),
       ]);
-
-      if (results[0].status === "fulfilled")
-        setSpecialtyData(results[0].value || []);
-      if (results[1].status === "fulfilled") setLtvData(results[1].value);
-      if (results[2].status === "fulfilled")
-        setClientsByState(results[2].value || []);
-      if (results[3].status === "fulfilled")
-        setPurchaseHistory(results[3].value || []);
+      setLtvData(ltv);
+      setMrrData(mrr);
+      setSpecialtyData(specialty || []);
+      setClientsByState(byState || []);
     } catch (error) {
-      console.error("Erro geral ao carregar relatórios de clientes:", error);
+      console.error("Erro ao carregar relatórios:", error);
     } finally {
       setIsLoading(false);
     }
   }, []);
 
+  const fetchMonthlySales = useCallback(async (date: Date) => {
+    setIsSalesLoading(true);
+    try {
+      const monthString = format(date, "yyyy-MM");
+      const sales = await reportsAPI.getMonthlySales(monthString);
+      setMonthlySales(sales);
+    } catch (error) {
+      console.error("Erro ao carregar vendas do mês:", error);
+    } finally {
+      setIsSalesLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
-    fetchClientReports(period);
-  }, [period, fetchClientReports]);
+    fetchAllReports();
+    fetchMonthlySales(selectedDate);
+  }, [fetchAllReports, fetchMonthlySales, selectedDate]);
 
   if (isLoading) {
     return (
@@ -112,6 +122,11 @@ export function ClientAnalyticsDashboard() {
       </div>
     );
   }
+
+  const totalSalesInMonth = monthlySales.reduce(
+    (sum, sale) => sum + Number(sale.total_spent_in_month),
+    0
+  );
 
   return (
     <div className="space-y-6">
@@ -124,145 +139,172 @@ export function ClientAnalyticsDashboard() {
             Entenda o perfil e o valor dos seus clientes
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Select value={period} onValueChange={setPeriod}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Selecionar período..." />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todo o Período</SelectItem>
-              <SelectItem value="90">Últimos 90 dias</SelectItem>
-              <SelectItem value="180">Últimos 180 dias</SelectItem>
-              <SelectItem value="365">Últimos 365 dias</SelectItem>
-            </SelectContent>
-          </Select>
-          <Button
-            onClick={() => fetchClientReports(period)}
-            disabled={isLoading}
-          >
-            <RefreshCw
-              className={`mr-2 h-4 w-4 ${isLoading ? "animate-spin" : ""}`}
-            />
-            Atualizar
-          </Button>
-        </div>
+        <Button onClick={fetchAllReports} disabled={isLoading}>
+          <RefreshCw
+            className={`mr-2 h-4 w-4 ${isLoading ? "animate-spin" : ""}`}
+          />
+          Atualizar Métricas
+        </Button>
       </div>
 
-      <Tabs defaultValue="overview">
-        <TabsList className="grid w-full grid-cols-2 md:grid-cols-4">
-          <TabsTrigger value="overview">Métricas Chave</TabsTrigger>
-          <TabsTrigger value="specialty">Por Especialidade</TabsTrigger>
-          <TabsTrigger value="location">Por Localização</TabsTrigger>
-          <TabsTrigger value="revenue-trends">
-            Receita e Recorrência
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">
+              Total de Clientes
+            </CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {ltvData?.totalClients?.toLocaleString() || "0"}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Clientes cadastrados na base
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">LTV Médio</CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              R${" "}
+              {ltvData?.averageLTV?.toLocaleString("pt-BR", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              }) || "0,00"}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Valor médio total por cliente
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">
+              MRR (Contratos)
+            </CardTitle>
+            <Clock className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              R${" "}
+              {mrrData?.current_mrr?.toLocaleString("pt-BR", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              }) || "0,00"}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Receita recorrente de contratos ativos
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Tabs defaultValue="revenue-calendar">
+        <TabsList className="grid w-full grid-cols-2 md:grid-cols-3">
+          <TabsTrigger value="revenue-calendar">
+            Receita de Reservas
           </TabsTrigger>
+          <TabsTrigger value="specialty">Análise por Especialidade</TabsTrigger>
+          <TabsTrigger value="location">Análise por Localização</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="overview" className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
-                  Total de Clientes
+        <TabsContent value="revenue-calendar" className="mt-4">
+          <div className="grid gap-6 lg:grid-cols-5">
+            <Card className="lg:col-span-2">
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <CalendarDays className="mr-2 h-5 w-5" /> Vendas por Dia
                 </CardTitle>
-                <Users className="h-4 w-4 text-muted-foreground" />
+                <CardDescription>
+                  Selecione um mês para ver as vendas e detalhes.
+                </CardDescription>
               </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {ltvData?.totalClients?.toLocaleString() || "0"}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Clientes totais no período selecionado
-                </p>
+              <CardContent className="flex justify-center">
+                <Calendar
+                  mode="single"
+                  selected={selectedDate}
+                  onSelect={(day: Date | undefined) =>
+                    setSelectedDate(day || new Date())
+                  }
+                  onMonthChange={(month: Date) => fetchMonthlySales(month)}
+                  locale={ptBR}
+                  className="p-0"
+                />
               </CardContent>
             </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">LTV Médio</CardTitle>
-                <DollarSign className="h-4 w-4 text-muted-foreground" />
+
+            <Card className="lg:col-span-3">
+              <CardHeader>
+                <CardTitle>
+                  Detalhes de Vendas -{" "}
+                  {format(selectedDate, "MMMM yyyy", { locale: ptBR })}
+                </CardTitle>
+                <CardDescription>
+                  Total vendido no mês:{" "}
+                  <span className="font-bold text-primary">
+                    R${" "}
+                    {totalSalesInMonth.toLocaleString("pt-BR", {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </span>
+                </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">
-                  R${" "}
-                  {ltvData?.averageLTV?.toLocaleString("pt-BR", {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  }) || "0,00"}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Valor médio vitalício por cliente
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">MRR Médio</CardTitle>
-                <Clock className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  R${" "}
-                  {purchaseHistory.reduce(
-                    (acc, item) => acc + item.revenue,
-                    0
-                  ) /
-                    purchaseHistory.length >
-                  0
-                    ? (
-                        purchaseHistory.reduce(
-                          (acc, item) => acc + item.revenue,
-                          0
-                        ) / purchaseHistory.length
-                      ).toLocaleString("pt-BR", {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })
-                    : "0,00"}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Receita Média (período exibido no gráfico)
-                </p>
+                {isSalesLoading ? (
+                  <div className="flex justify-center items-center h-40">
+                    <Loader2 className="h-6 w-6 animate-spin" />
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Cliente</TableHead>
+                        <TableHead className="text-right">
+                          Valor Gasto
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {monthlySales.length > 0 ? (
+                        monthlySales.map((sale) => (
+                          <TableRow key={sale.client_id}>
+                            <TableCell className="font-medium">
+                              {sale.client_name}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              R${" "}
+                              {Number(sale.total_spent_in_month).toLocaleString(
+                                "pt-BR",
+                                {
+                                  minimumFractionDigits: 2,
+                                  maximumFractionDigits: 2,
+                                }
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      ) : (
+                        <TableRow>
+                          <TableCell colSpan={2} className="text-center h-24">
+                            Nenhuma venda registrada para este mês.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                )}
               </CardContent>
             </Card>
           </div>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Receita Total por Período</CardTitle>
-              <CardDescription>
-                Soma da receita total gerada pelos clientes.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="pl-2">
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart
-                  data={[
-                    {
-                      name: "Receita",
-                      value: ltvData?.totalLifetimeRevenue || 0,
-                    },
-                  ]}
-                >
-                  <XAxis dataKey="name" />
-                  <YAxis
-                    tickFormatter={(value) =>
-                      `R$ ${value.toLocaleString("pt-BR")}`
-                    }
-                  />
-                  <Tooltip
-                    formatter={(value: number) => [
-                      `R$ ${value.toLocaleString("pt-BR")}`,
-                      "Receita Total",
-                    ]}
-                  />
-                  <Bar dataKey="value" fill={COLORS[0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
         </TabsContent>
 
-        <TabsContent value="specialty" className="space-y-4">
+        <TabsContent value="specialty" className="space-y-4 mt-4">
           <Card>
             <CardHeader>
               <CardTitle>Clientes por Especialidade</CardTitle>
@@ -337,7 +379,7 @@ export function ClientAnalyticsDashboard() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="location" className="space-y-4">
+        <TabsContent value="location" className="space-y-4 mt-4">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -362,116 +404,6 @@ export function ClientAnalyticsDashboard() {
                   <Bar dataKey="clients" name="Nº de Clientes" fill="#8884d8" />
                 </BarChart>
               </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="revenue-trends" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Receita das Reservas</CardTitle>
-              <CardDescription>
-                Soma de todas as compras adicionadas por mês.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="pl-2">
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart
-                  data={(purchaseHistory || []).filter((item) => {
-                    const itemDate = startOfMonth(parseISO(`${item.month}-01`));
-                    const filterDate = new Date("2025-07-01");
-                    return itemDate >= filterDate;
-                  })}
-                >
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis
-                    dataKey="month"
-                    tickFormatter={(value) =>
-                      format(parseISO(`${value}-01`), "MMM/yy", {
-                        locale: ptBR,
-                      })
-                    }
-                  />
-                  <YAxis
-                    tickFormatter={(value) =>
-                      `R$ ${value.toLocaleString("pt-BR")}`
-                    }
-                  />
-                  <Tooltip
-                    formatter={(value: number) => [
-                      `R$ ${value.toLocaleString("pt-BR")}`,
-                      "Receita",
-                    ]}
-                    labelFormatter={(label: string) =>
-                      format(parseISO(`${label}-01`), "MMMM de yyyy", {
-                        locale: ptBR,
-                      })
-                    }
-                  />
-                  <Legend
-                    verticalAlign="top"
-                    height={36}
-                    content={
-                      <div className="flex justify-center items-center mt-2">
-                        <div
-                          className="w-3 h-3 rounded-full mr-2"
-                          style={{ backgroundColor: COLORS[2] }}
-                        ></div>
-                        <span className="text-sm">
-                          Receita Mensal das Reservas
-                        </span>
-                      </div>
-                    }
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="revenue"
-                    stroke={COLORS[2]}
-                    strokeWidth={2}
-                    name="Receita Mensal"
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Top 5 Especialidades por Receita</CardTitle>
-              <CardDescription>
-                As especialidades que mais geraram receita.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Especialidade</TableHead>
-                    <TableHead>Total Clientes</TableHead>
-                    <TableHead>Receita Total</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {specialtyData
-                    .sort((a, b) => b.totalRevenue - a.totalRevenue)
-                    .slice(0, 5)
-                    .map((item, index) => (
-                      <TableRow key={index}>
-                        <TableCell className="font-medium">
-                          {item.specialty}
-                        </TableCell>
-                        <TableCell>{item.totalClients}</TableCell>
-                        <TableCell>
-                          R${" "}
-                          {item.totalRevenue.toLocaleString("pt-BR", {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          })}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                </TableBody>
-              </Table>
             </CardContent>
           </Card>
         </TabsContent>

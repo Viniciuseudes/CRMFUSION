@@ -515,6 +515,16 @@ export const reportsAPI = {
     return response.data;
   },
 
+  getContractsMrr: async (): Promise<{ current_mrr: number }> => {
+    const response = await apiClient.get("/reports/mrr-contracts");
+    return response.data;
+  },
+
+  getMonthlySales: async (month: string): Promise<{ client_id: number; client_name: string; total_spent_in_month: number }[]> => {
+    const response = await apiClient.get("/reports/monthly-sales", { params: { month } });
+    return response.data;
+  },
+  
   exportData: async (): Promise<any> => {
     const response = await apiClient.get("/reports/export");
     return response.data;
