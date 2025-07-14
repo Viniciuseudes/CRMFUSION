@@ -1,24 +1,17 @@
-// crmapi/src/routes/reports.js
-const express = require("express")
-const pool = require("../config/database")
-const { startOfMonth, endOfMonth, subMonths, format, subDays, subWeeks } = require("date-fns")
+const express = require("express");
+const pool = require("../config/database");
+const { startOfMonth, subMonths, format, subDays, subWeeks } = require("date-fns");
 
-const router = express.Router()
+const router = express.Router();
 
-// Helper para calcular a data de início com base no período
 function getStartDate(periodValue) {
-  let startDate = new Date(); // Inicia com a data atual
-  
+  let startDate = new Date();
   if (periodValue === "all" || !periodValue) {
-    // Para 'all', não aplicamos filtro de data
     return null;
   }
-
   const numericPeriod = Number.parseInt(periodValue);
-
-  if (Number.isNaN(numericPeriod)) {
-    // Fallback para strings como 'month', 'week', etc.
-    switch(periodValue) {
+  if (isNaN(numericPeriod)) {
+    switch (periodValue) {
       case 'month':
         return startOfMonth(subMonths(new Date(), 1));
       case 'week':
@@ -26,19 +19,12 @@ function getStartDate(periodValue) {
       case 'day':
         return subDays(new Date(), 1);
       default:
-        return null; // Fallback seguro
+        return null;
     }
-  } else {
-    // Se for um número (30, 90, 365, etc.)
-    return subDays(startDate, numericPeriod);
   }
+  return subDays(startDate, numericPeriod);
 }
 
-// =================================================================
-// ROTAS PARA O DASHBOARD PRINCIPAL (RELATÓRIOS)
-// =================================================================
-
-// Estatísticas gerais
 router.get("/stats", async (req, res, next) => {
   try {
     const { period = "30" } = req.query;
@@ -51,9 +37,10 @@ router.get("/stats", async (req, res, next) => {
         params.push(startDate);
     }
     
-    const userFilter = req.user.role !== "admin" ? `AND assigned_to = $${params.length + 1}` : "";
+    let userFilter = '';
     if (req.user.role !== "admin") {
-      params.push(req.user.id);
+        userFilter = `AND assigned_to = $${params.length + 1}`;
+        params.push(req.user.id);
     }
 
     const [totalLeads, totalClients, totalPipelineValue, totalRevenue, avgPipelineTime, clientsNeedingReactivation] =
@@ -84,12 +71,11 @@ router.get("/stats", async (req, res, next) => {
   }
 });
 
-// Estatísticas por funil
 router.get("/funnel-stats", async (req, res, next) => {
     try {
         const { period = "30" } = req.query;
         const startDate = getStartDate(period);
-        let query = `SELECT funnel, stage, COUNT(*) as count, SUM(value) as total_value FROM leads WHERE created_at >= $1`;
+        let query = `SELECT funnel, stage, COUNT(*) as count, SUM(value) as total_value, AVG(value) as avg_value FROM leads WHERE created_at >= $1`;
         const params = [startDate];
 
         if (req.user.role !== "admin") {
@@ -104,11 +90,12 @@ router.get("/funnel-stats", async (req, res, next) => {
             if (!funnelStats[row.funnel]) {
                 funnelStats[row.funnel] = { count: 0, value: 0, stages: {} };
             }
-            funnelStats[row.funnel].count += Number(row.count);
-            funnelStats[row.funnel].value += Number(row.total_value) || 0;
+            funnelStats[row.funnel].count += Number.parseInt(row.count);
+            funnelStats[row.funnel].value += Number.parseFloat(row.total_value) || 0;
             funnelStats[row.funnel].stages[row.stage] = {
-                count: Number(row.count),
-                value: Number(row.total_value) || 0
+                count: Number.parseInt(row.count),
+                value: Number.parseFloat(row.total_value) || 0,
+                avg_value: Number.parseFloat(row.avg_value) || 0,
             };
         });
         res.json(funnelStats);
@@ -117,26 +104,38 @@ router.get("/funnel-stats", async (req, res, next) => {
     }
 });
 
-// Estatísticas por origem
 router.get("/source-stats", async (req, res, next) => {
-    try {
-        const { period = "30" } = req.query;
-        const startDate = getStartDate(period);
-        let query = `SELECT source, COUNT(*) as count, SUM(value) as total_value FROM leads WHERE created_at >= $1`;
-        const params = [startDate];
-        if (req.user.role !== "admin") {
-            query += ` AND assigned_to = $2`;
-            params.push(req.user.id);
-        }
-        query += ` GROUP BY source ORDER BY count DESC`;
-        const result = await pool.query(query, params);
-        res.json(result.rows);
-    } catch (error) {
-        next(error);
+  try {
+    const { period = "30" } = req.query;
+    const startDate = getStartDate(period);
+    let query = `
+      SELECT source, COUNT(*) as count, SUM(value) as total_value, AVG(value) as avg_value
+      FROM leads WHERE created_at >= $1
+    `;
+    const params = [startDate];
+
+    if (req.user.role !== "admin") {
+      query += ` AND assigned_to = $2`;
+      params.push(req.user.id);
     }
+
+    query += ` GROUP BY source ORDER BY count DESC`;
+    const result = await pool.query(query, params);
+
+    const sourceStats = {};
+    result.rows.forEach((row) => {
+      sourceStats[row.source] = {
+        count: Number.parseInt(row.count),
+        value: Number.parseFloat(row.total_value) || 0,
+        avg_value: Number.parseFloat(row.avg_value) || 0,
+      };
+    });
+    res.json(sourceStats);
+  } catch (error) {
+    next(error);
+  }
 });
 
-// Conversões por mês
 router.get("/conversions-by-month", async (req, res, next) => {
     try {
         const { months = "6" } = req.query;
@@ -159,25 +158,43 @@ router.get("/conversions-by-month", async (req, res, next) => {
     }
 });
 
-// Performance por usuário
 router.get("/user-performance", async (req, res, next) => {
-    try {
-        if (req.user.role !== "admin") return res.status(403).json({ error: "Acesso restrito" });
-        const { period = "30" } = req.query;
-        const startDate = getStartDate(period);
-        const result = await pool.query(`
-            SELECT u.id, u.name, COUNT(CASE WHEN a.type = 'conversion' THEN 1 END) as conversions, COUNT(a.id) as total_activities,
-                   CASE WHEN COUNT(a.id) > 0 THEN ROUND((COUNT(CASE WHEN a.type = 'conversion' THEN 1 END)::DECIMAL / COUNT(a.id)) * 100, 2) ELSE 0 END as efficiency_rate
-            FROM users u LEFT JOIN activities a ON u.id = a.user_id AND a.date >= $1
-            WHERE u.is_active = true GROUP BY u.id, u.name ORDER BY conversions DESC
-        `, [startDate]);
-        res.json(result.rows);
-    } catch (error) {
-        next(error);
+  try {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ error: "Acesso restrito a administradores" });
     }
+
+    const { period = "30" } = req.query;
+    const startDate = getStartDate(period);
+
+    const result = await pool.query(
+      `
+      SELECT u.id, u.name,
+        COUNT(CASE WHEN a.type = 'conversion' THEN 1 END) as conversions,
+        COUNT(a.id) as total_activities,
+        CASE WHEN COUNT(a.id) > 0 THEN ROUND((COUNT(CASE WHEN a.type = 'conversion' THEN 1 END)::DECIMAL / COUNT(a.id)) * 100, 2) ELSE 0 END as efficiency_rate
+      FROM users u
+      LEFT JOIN activities a ON u.id = a.user_id AND a.date >= $1
+      WHERE u.is_active = true
+      GROUP BY u.id, u.name
+      ORDER BY conversions DESC
+    `, [startDate]);
+
+    const userPerformance = {};
+    result.rows.forEach((row) => {
+      userPerformance[row.id] = {
+        name: row.name,
+        conversions: Number.parseInt(row.conversions),
+        totalActivities: Number.parseInt(row.total_activities),
+        efficiencyRate: Number.parseFloat(row.efficiency_rate),
+      };
+    });
+    res.json(userPerformance);
+  } catch (error) {
+    next(error);
+  }
 });
 
-// Relatório de leads por período
 router.get("/leads-timeline", async (req, res, next) => {
   try {
     const { period = "week", limit = "10" } = req.query;
@@ -219,7 +236,6 @@ router.get("/leads-timeline", async (req, res, next) => {
   }
 });
 
-// Leads por estado
 router.get("/leads-by-state", async (req, res, next) => {
   try {
     let query = `SELECT state, COUNT(id) as count FROM leads WHERE state IS NOT NULL AND is_converted_client = FALSE AND is_standby = FALSE`;
@@ -236,7 +252,6 @@ router.get("/leads-by-state", async (req, res, next) => {
   }
 });
 
-// Exportar dados para backup
 router.get("/export", async (req, res, next) => {
     try {
         if (req.user.role !== "admin") {
@@ -266,11 +281,6 @@ router.get("/export", async (req, res, next) => {
     }
 });
 
-// =====================================================================
-// ROTAS PARA A TELA DE ANÁLISE DE CLIENTES
-// =====================================================================
-
-// Análise de Lifetime Value (LTV)
 router.get("/ltv-analysis", async (req, res, next) => {
     try {
         const result = await pool.query(`SELECT COUNT(id) as totalClients, COALESCE(SUM(total_spent), 0) as totalLifetimeRevenue FROM clients`);
@@ -284,7 +294,6 @@ router.get("/ltv-analysis", async (req, res, next) => {
     }
 });
 
-// MRR (Receita Recorrente Mensal) de Contratos
 router.get("/mrr-contracts", async (req, res, next) => {
     try {
         const query = `SELECT COALESCE(SUM(monthly_value), 0) as current_mrr FROM contracts WHERE status = 'ativo' AND CURRENT_DATE BETWEEN start_date AND end_date`;
@@ -295,7 +304,6 @@ router.get("/mrr-contracts", async (req, res, next) => {
     }
 });
 
-// Vendas Mensais Detalhadas (para o calendário)
 router.get("/monthly-sales", async (req, res, next) => {
     try {
         const { month } = req.query;
@@ -320,7 +328,6 @@ router.get("/monthly-sales", async (req, res, next) => {
     }
 });
 
-// Análise por Especialidade
 router.get("/client-specialty-analysis", async (req, res, next) => {
     try {
         const result = await pool.query(`SELECT specialty, COUNT(id) as "totalClients", COALESCE(SUM(total_spent), 0) as "totalRevenue" FROM clients GROUP BY specialty ORDER BY "totalClients" DESC`);
@@ -330,7 +337,6 @@ router.get("/client-specialty-analysis", async (req, res, next) => {
     }
 });
 
-// Clientes por Estado
 router.get("/clients-by-state", async (req, res, next) => {
     try {
         const result = await pool.query(`SELECT state, COUNT(id) as clients FROM clients WHERE state IS NOT NULL AND state <> '' GROUP BY state ORDER BY clients DESC`);
