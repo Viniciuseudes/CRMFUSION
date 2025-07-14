@@ -45,6 +45,9 @@ import {
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
+// --- IMPORTAÇÃO ESSENCIAL PARA ESTILIZAR O CALENDÁRIO ---
+import "react-day-picker/dist/style.css";
+
 const COLORS = [
   "#3b82f6",
   "#10b981",
@@ -66,7 +69,6 @@ type MonthlySale = {
 export function ClientAnalyticsDashboard() {
   const [isLoading, setIsLoading] = useState(true);
 
-  // States para todos os dados dos relatórios
   const [ltvData, setLtvData] = useState<any>(null);
   const [mrrData, setMrrData] = useState<any>(null);
   const [specialtyData, setSpecialtyData] = useState<any[]>([]);
@@ -157,7 +159,7 @@ export function ClientAnalyticsDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {ltvData?.totalClients?.toLocaleString() || "0"}
+              {ltvData?.totalclients?.toLocaleString() || "0"}
             </div>
             <p className="text-xs text-muted-foreground">
               Clientes cadastrados na base
@@ -172,10 +174,10 @@ export function ClientAnalyticsDashboard() {
           <CardContent>
             <div className="text-2xl font-bold">
               R${" "}
-              {ltvData?.averageLTV?.toLocaleString("pt-BR", {
+              {Number(ltvData?.averageltv || 0).toLocaleString("pt-BR", {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2,
-              }) || "0,00"}
+              })}
             </div>
             <p className="text-xs text-muted-foreground">
               Valor médio total por cliente
@@ -192,10 +194,10 @@ export function ClientAnalyticsDashboard() {
           <CardContent>
             <div className="text-2xl font-bold">
               R${" "}
-              {mrrData?.current_mrr?.toLocaleString("pt-BR", {
+              {Number(mrrData?.current_mrr || 0).toLocaleString("pt-BR", {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2,
-              }) || "0,00"}
+              })}
             </div>
             <p className="text-xs text-muted-foreground">
               Receita recorrente de contratos ativos
@@ -204,8 +206,8 @@ export function ClientAnalyticsDashboard() {
         </Card>
       </div>
 
-      <Tabs defaultValue="revenue-calendar">
-        <TabsList className="grid w-full grid-cols-2 md:grid-cols-3">
+      <Tabs defaultValue="revenue-calendar" className="w-full">
+        <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3">
           <TabsTrigger value="revenue-calendar">
             Receita de Reservas
           </TabsTrigger>
@@ -215,33 +217,21 @@ export function ClientAnalyticsDashboard() {
 
         <TabsContent value="revenue-calendar" className="mt-4">
           <div className="grid gap-6 lg:grid-cols-5">
-            <Card className="lg:col-span-2">
-              <CardHeader>
-                <CardTitle className="flex items-center">
-                  <CalendarDays className="mr-2 h-5 w-5" /> Vendas por Dia
-                </CardTitle>
-                <CardDescription>
-                  Selecione um mês para ver as vendas e detalhes.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="flex justify-center">
-                <Calendar
-                  mode="single"
-                  selected={selectedDate}
-                  onSelect={(day: Date | undefined) =>
-                    setSelectedDate(day || new Date())
-                  }
-                  onMonthChange={(month: Date) => fetchMonthlySales(month)}
-                  locale={ptBR}
-                  className="p-0"
-                />
-              </CardContent>
+            <Card className="lg:col-span-2 flex flex-col items-center justify-center p-2">
+              <Calendar
+                mode="single"
+                selected={selectedDate}
+                onSelect={(day) => day && setSelectedDate(day)}
+                onMonthChange={(month) => fetchMonthlySales(month)}
+                locale={ptBR}
+                className="p-0"
+              />
             </Card>
 
             <Card className="lg:col-span-3">
               <CardHeader>
                 <CardTitle>
-                  Detalhes de Vendas -{" "}
+                  Vendas em{" "}
                   {format(selectedDate, "MMMM yyyy", { locale: ptBR })}
                 </CardTitle>
                 <CardDescription>
