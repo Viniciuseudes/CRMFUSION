@@ -348,12 +348,11 @@ router.get("/monthly-sales", async (req, res, next) => {
       SELECT
         a.client_id,
         c.name as client_name,
-        SUM(
-          COALESCE(
-            substring(a.description from 'R\\$ ([0-9.,]+)')::NUMERIC,
-            0
-          )
-        ) as total_spent_in_month
+        a.date as purchase_date, -- Devolve a data exata da compra
+        COALESCE(
+          substring(a.description from 'R\\$ ([0-9.,]+)')::NUMERIC,
+          0
+        ) as purchase_value -- Devolve o valor individual
       FROM activities a
       JOIN clients c ON a.client_id = c.id
       WHERE a.type = 'note'
@@ -367,7 +366,7 @@ router.get("/monthly-sales", async (req, res, next) => {
       params.push(req.user.id);
     }
     
-    query += ` GROUP BY a.client_id, c.name ORDER BY total_spent_in_month DESC;`;
+    query += ` ORDER BY a.date DESC;`;
     const result = await pool.query(query, params);
     res.json(result.rows);
   } catch (error) {
