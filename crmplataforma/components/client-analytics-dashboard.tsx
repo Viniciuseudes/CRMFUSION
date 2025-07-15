@@ -69,6 +69,7 @@ type MonthlySale = {
 export function ClientAnalyticsDashboard() {
   const [isLoading, setIsLoading] = useState(true);
 
+  // CORREÇÃO: Inicializando os estados como nulos ou vazios para evitar dados "fantasmas"
   const [ltvData, setLtvData] = useState<any>(null);
   const [mrrData, setMrrData] = useState<any>(null);
   const [specialtyData, setSpecialtyData] = useState<any[]>([]);
@@ -77,6 +78,21 @@ export function ClientAnalyticsDashboard() {
 
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [isSalesLoading, setIsSalesLoading] = useState(false);
+
+  // CORREÇÃO: Função para buscar vendas mensais, agora chamada explicitamente
+  const fetchMonthlySales = useCallback(async (date: Date) => {
+    setIsSalesLoading(true);
+    try {
+      const monthString = format(date, "yyyy-MM");
+      const sales = await reportsAPI.getMonthlySales(monthString);
+      setMonthlySales(sales || []); // Garante que seja um array
+    } catch (error) {
+      console.error("Erro ao carregar vendas do mês:", error);
+      setMonthlySales([]); // Limpa em caso de erro
+    } finally {
+      setIsSalesLoading(false);
+    }
+  }, []);
 
   const fetchAllReports = useCallback(async () => {
     setIsLoading(true);
@@ -91,30 +107,23 @@ export function ClientAnalyticsDashboard() {
       setMrrData(mrr);
       setSpecialtyData(specialty || []);
       setClientsByState(byState || []);
+      // CORREÇÃO: Chama a busca de vendas após carregar os relatórios principais
+      await fetchMonthlySales(selectedDate);
     } catch (error) {
       console.error("Erro ao carregar relatórios:", error);
     } finally {
       setIsLoading(false);
     }
-  }, []);
-
-  const fetchMonthlySales = useCallback(async (date: Date) => {
-    setIsSalesLoading(true);
-    try {
-      const monthString = format(date, "yyyy-MM");
-      const sales = await reportsAPI.getMonthlySales(monthString);
-      setMonthlySales(sales);
-    } catch (error) {
-      console.error("Erro ao carregar vendas do mês:", error);
-    } finally {
-      setIsSalesLoading(false);
-    }
-  }, []);
+  }, [fetchMonthlySales, selectedDate]);
 
   useEffect(() => {
     fetchAllReports();
+  }, [fetchAllReports]);
+
+  // CORREÇÃO: Efeito separado para lidar com a mudança de data no calendário
+  useEffect(() => {
     fetchMonthlySales(selectedDate);
-  }, [fetchAllReports, fetchMonthlySales, selectedDate]);
+  }, [selectedDate, fetchMonthlySales]);
 
   if (isLoading) {
     return (
@@ -158,8 +167,9 @@ export function ClientAnalyticsDashboard() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
+            {/* CORREÇÃO: Acessando a propriedade correta (totalClients) */}
             <div className="text-2xl font-bold">
-              {ltvData?.totalclients?.toLocaleString() || "0"}
+              {ltvData?.totalClients?.toLocaleString() || "0"}
             </div>
             <p className="text-xs text-muted-foreground">
               Clientes cadastrados na base
@@ -172,9 +182,10 @@ export function ClientAnalyticsDashboard() {
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
+            {/* CORREÇÃO: Acessando a propriedade correta (averageLTV) */}
             <div className="text-2xl font-bold">
               R${" "}
-              {Number(ltvData?.averageltv || 0).toLocaleString("pt-BR", {
+              {Number(ltvData?.averageLTV || 0).toLocaleString("pt-BR", {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2,
               })}
@@ -222,7 +233,7 @@ export function ClientAnalyticsDashboard() {
                 mode="single"
                 selected={selectedDate}
                 onSelect={(day) => day && setSelectedDate(day)}
-                onMonthChange={(month) => fetchMonthlySales(month)}
+                onMonthChange={(month) => setSelectedDate(month)} // Apenas atualiza a data selecionada
                 locale={ptBR}
                 className="p-0"
               />
