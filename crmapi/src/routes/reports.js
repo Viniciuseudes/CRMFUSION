@@ -276,16 +276,14 @@ router.get("/ltv-analysis", async (req, res, next) => {
     let query = "SELECT id, total_spent, entry_date FROM clients c";
     const params = [];
 
-    // Aplica filtro de permissão
     if (req.user.role === 'colaborador') {
       query += ` WHERE c.assigned_to = $1`;
       params.push(req.user.id);
     }
     
     const { rows: clients } = await pool.query(query, params);
-
     const totalClients = clients.length;
-    
+
     if (totalClients === 0) {
       return res.json({
         totalClients: 0,
@@ -296,10 +294,12 @@ router.get("/ltv-analysis", async (req, res, next) => {
     }
 
     const totalLifetimeRevenue = clients.reduce((sum, client) => sum + parseFloat(client.total_spent || '0'), 0);
-    
     const totalDaysAsClient = clients.reduce((sum, client) => {
-      const days = (new Date() - new Date(client.entry_date)) / (1000 * 60 * 60 * 24);
-      return sum + days;
+      const entry = new Date(client.entry_date);
+      if (!isNaN(entry.getTime())) {
+        return sum + (new Date() - entry) / (1000 * 60 * 60 * 24);
+      }
+      return sum;
     }, 0);
 
     const avgClientLifespanDays = totalClients > 0 ? totalDaysAsClient / totalClients : 0;
@@ -319,23 +319,6 @@ router.get("/ltv-analysis", async (req, res, next) => {
 
 // MRR de Contratos - CORRIGIDA
 router.get("/mrr-contracts", async (req, res, next) => {
-  try {
-    let query = `
-      SELECT COALESCE(SUM(monthly_value), 0) as current_mrr
-      FROM contracts
-      WHERE status = 'ativo' AND CURRENT_DATE BETWEEN start_date AND end_date
-    `;
-    const params = [];
-    if (req.user.role === 'colaborador') {
-      query += ` AND created_by = $1`;
-      params.push(req.user.id);
-    }
-    const result = await pool.query(query, params);
-    res.json(result.rows[0]);
-  } catch (error) {
-    next(error);
-  }
-});router.get("/mrr-contracts", async (req, res, next) => {
   try {
     let query = `
       SELECT COALESCE(SUM(monthly_value), 0) as current_mrr
