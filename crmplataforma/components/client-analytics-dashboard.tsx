@@ -167,7 +167,7 @@ export function ClientAnalyticsDashboard() {
 
   useEffect(() => {
     loadDashboardData();
-  }, [loadDashboardData]);
+  }, []);
   useEffect(() => {
     fetchPurchasesForMonth(selectedDate);
   }, [selectedDate, fetchPurchasesForMonth]);
@@ -391,7 +391,6 @@ export function ClientAnalyticsDashboard() {
                   <YAxis
                     tickFormatter={(value) => `R$${(value / 1000).toFixed(0)}k`}
                   />
-                  {/* CORREÇÃO: Ajustando o nome no Tooltip */}
                   <Tooltip
                     formatter={(value: number, name: string) => [
                       `R$ ${value.toLocaleString("pt-BR", {
@@ -401,7 +400,6 @@ export function ClientAnalyticsDashboard() {
                     ]}
                   />
                   <Legend />
-                  {/* CORREÇÃO: Ajustando o nome na Legenda */}
                   <Line
                     type="monotone"
                     dataKey="revenue"
@@ -423,7 +421,6 @@ export function ClientAnalyticsDashboard() {
             </CardContent>
           </Card>
         </TabsContent>
-        {/* As outras abas (Specialty, Location) não precisam de alteração */}
         <TabsContent value="specialty" className="space-y-4 mt-4">
           <Card>
             <CardHeader>
