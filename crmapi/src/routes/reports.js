@@ -3,6 +3,7 @@ const express = require("express")
 const pool = require("../config/database")
 const { startOfMonth, endOfMonth, subMonths, format, subDays,parseISO,eachMonthOfInterval, subWeeks } = require("date-fns")
 const { requireRole } = require("../middleware/auth"); // Importando o requireRole
+const { ptBR } = require("date-fns/locale");
 
 const router = express.Router()
 
