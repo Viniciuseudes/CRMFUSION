@@ -341,13 +341,12 @@ router.get("/monthly-sales", async (req, res, next) => {
 });
 
 // ROTA FINAL: Histórico de compras para o gráfico
-rrouter.get("/reservations-revenue-history", async (req, res, next) => {
+router.get("/reservations-revenue-history", async (req, res, next) => {
   try {
-    // CORREÇÃO: A extração do número agora preserva o ponto decimal.
     const query = `
       SELECT 
         TO_CHAR(date_trunc('month', date), 'YYYY-MM') as month, 
-        SUM(COALESCE(substring(description from 'R\\$\\s*([0-9.]+)'), '0')::NUMERIC) as revenue 
+        SUM(COALESCE(regexp_replace(substring(description from 'R\\$\\s*([0-9.,]+)'), '[.,]', '', 'g')::NUMERIC, 0)) as revenue 
       FROM activities 
       WHERE type = 'note' AND description LIKE 'Nova compra registrada%' 
       GROUP BY month 
