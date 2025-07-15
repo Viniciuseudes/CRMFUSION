@@ -9,27 +9,10 @@ const router = express.Router()
 // Helper para calcular a data de início com base no período
 function getStartDate(periodValue) {
   let startDate = new Date();
-  
-  if (periodValue === "all") {
-    return new Date(0); // Epoch, para incluir todos os registros
-  }
-
-  const numericPeriod = Number.parseInt(periodValue);
-
-  if (Number.isNaN(numericPeriod)) {
-    switch(periodValue) {
-      case 'month':
-        return startOfMonth(subMonths(new Date(), 1));
-      case 'week':
-        return subWeeks(new Date(), 1);
-      case 'day':
-        return subDays(new Date(), 1);
-      default:
-        return new Date(0);
-    }
-  } else {
-    return subDays(startDate, numericPeriod);
-  }
+  if (periodValue === "all") return new Date(0);
+  const numericPeriod = parseInt(periodValue, 10);
+  if (isNaN(numericPeriod)) return new Date(0);
+  return subDays(startDate, numericPeriod);
 }
 
 // Estatísticas gerais
@@ -250,7 +233,7 @@ router.get("/user-performance", requireRole(["admin", "gerente"]), async (req, r
 
 // ***** NOVAS ROTAS DE ANÁLISE DE CLIENTES (CORRIGIDAS) *****
 
-// Análise de clientes por especialidade
+// Análise por Especialidade - CORRIGIDA
 router.get("/client-specialty-analysis", async (req, res, next) => {
   try {
     const { period = "all" } = req.query;
@@ -258,18 +241,14 @@ router.get("/client-specialty-analysis", async (req, res, next) => {
       SELECT 
         specialty,
         COUNT(id) as total_clients,
-        COALESCE(SUM(total_spent), 0) as total_revenue,
-        COALESCE(AVG(total_spent), 0) as avg_revenue_per_client
-      FROM clients c
-      WHERE 1=1
+        COALESCE(SUM(total_spent), 0) as total_revenue
+      FROM clients c WHERE 1=1
     `;
     const params = [];
-    
-    const startDate = getStartDate(period);
 
     if (period !== "all") {
       query += ` AND c.created_at >= $${params.length + 1}`;
-      params.push(startDate);
+      params.push(getStartDate(period));
     }
     
     if (req.user.role === 'colaborador') {
@@ -277,22 +256,21 @@ router.get("/client-specialty-analysis", async (req, res, next) => {
       params.push(req.user.id);
     }
 
-    query += ' GROUP BY specialty ORDER BY total_clients DESC';
-
+    query += ' GROUP BY specialty ORDER BY total_revenue DESC';
     const result = await pool.query(query, params);
 
     res.json(result.rows.map(row => ({
-      specialty: row.specialty,
-      totalClients: Number.parseInt(row.total_clients),
-      totalRevenue: Number.parseFloat(row.total_revenue),
-      avgRevenuePerClient: Number.parseFloat(row.avg_revenue_per_client),
+      specialty: row.specialty || 'Não especificada',
+      totalClients: parseInt(row.total_clients, 10),
+      totalRevenue: parseFloat(row.total_revenue),
     })));
   } catch (error) {
     next(error);
   }
 });
 
-// Análise de Lifetime Value (LTV)
+
+// Análise de Lifetime Value (LTV) - CORRIGIDA
 router.get("/ltv-analysis", async (req, res, next) => {
   try {
     const { period = "all" } = req.query;
@@ -300,17 +278,14 @@ router.get("/ltv-analysis", async (req, res, next) => {
       SELECT 
         COUNT(id) as total_clients,
         COALESCE(SUM(total_spent), 0) as total_lifetime_revenue,
-        AVG(EXTRACT(DAY FROM (CURRENT_DATE - entry_date))) as avg_client_days
-      FROM clients c
-      WHERE 1=1
+        COALESCE(AVG(EXTRACT(DAY FROM (CURRENT_DATE - entry_date))), 0) as avg_client_days
+      FROM clients c WHERE 1=1
     `;
     const params = [];
 
-    const startDate = getStartDate(period);
-    
     if (period !== "all") {
       query += ` AND c.created_at >= $${params.length + 1}`;
-      params.push(startDate);
+      params.push(getStartDate(period));
     }
 
     if (req.user.role === 'colaborador') {
@@ -321,9 +296,9 @@ router.get("/ltv-analysis", async (req, res, next) => {
     const result = await pool.query(query, params);
 
     const data = result.rows[0];
-    const totalClients = Number.parseInt(data.total_clients) || 0;
-    const totalLifetimeRevenue = Number.parseFloat(data.total_lifetime_revenue) || 0;
-    const avgClientLifespanDays = Number.parseFloat(data.avg_client_days) || 0;
+    const totalClients = parseInt(data.total_clients || '0', 10);
+    const totalLifetimeRevenue = parseFloat(data.total_lifetime_revenue || '0');
+    const avgClientLifespanDays = parseFloat(data.avg_client_days || '0');
     const averageLTV = totalClients > 0 ? totalLifetimeRevenue / totalClients : 0;
 
     res.json({
@@ -337,7 +312,8 @@ router.get("/ltv-analysis", async (req, res, next) => {
   }
 });
 
-// MRR de Contratos
+
+// MRR de Contratos - CORRIGIDA
 router.get("/mrr-contracts", async (req, res, next) => {
   try {
     let query = `
@@ -346,12 +322,10 @@ router.get("/mrr-contracts", async (req, res, next) => {
       WHERE status = 'ativo' AND CURRENT_DATE BETWEEN start_date AND end_date
     `;
     const params = [];
-    
     if (req.user.role === 'colaborador') {
       query += ` AND created_by = $1`;
       params.push(req.user.id);
     }
-
     const result = await pool.query(query, params);
     res.json(result.rows[0]);
   } catch (error) {
@@ -359,24 +333,26 @@ router.get("/mrr-contracts", async (req, res, next) => {
   }
 });
 
-// Vendas mensais detalhadas
+
+// Vendas mensais detalhadas - CORRIGIDA E SEGURA
 router.get("/monthly-sales", async (req, res, next) => {
   try {
-    const { month } = req.query; 
-
+    const { month } = req.query;
     if (!month || !/^\d{4}-\d{2}$/.test(month)) {
       return res.status(400).json({ error: "Formato de mês inválido. Use YYYY-MM." });
     }
-
     const startDate = `${month}-01`;
     const endDate = new Date(new Date(startDate).setMonth(new Date(startDate).getMonth() + 1)).toISOString().split('T')[0];
     
     let query = `
       SELECT
-        client_id,
+        a.client_id,
         c.name as client_name,
         SUM(
-          (regexp_matches(a.description, 'R\\$ ([0-9,.]+)'))[1]::NUMERIC
+          COALESCE(
+            substring(a.description from 'R\\$ ([0-9.,]+)')::NUMERIC,
+            0
+          )
         ) as total_spent_in_month
       FROM activities a
       JOIN clients c ON a.client_id = c.id
@@ -392,7 +368,6 @@ router.get("/monthly-sales", async (req, res, next) => {
     }
     
     query += ` GROUP BY a.client_id, c.name ORDER BY total_spent_in_month DESC;`;
-    
     const result = await pool.query(query, params);
     res.json(result.rows);
   } catch (error) {
@@ -400,13 +375,11 @@ router.get("/monthly-sales", async (req, res, next) => {
   }
 });
 
-// Clientes por estado
+// Clientes por Estado - CORRIGIDA
 router.get("/clients-by-state", async (req, res, next) => {
   try {
     let query = `
-      SELECT 
-        state,
-        COUNT(id) as count
+      SELECT state, COUNT(id) as count
       FROM clients 
       WHERE state IS NOT NULL AND state <> ''
     `;
@@ -416,14 +389,44 @@ router.get("/clients-by-state", async (req, res, next) => {
       query += ` AND assigned_to = $1`;
       params.push(req.user.id);
     }
-
     query += ` GROUP BY state ORDER BY count DESC`;
-
     const result = await pool.query(query, params);
-
     res.json(result.rows.map(row => ({
       state: row.state,
-      clients: Number.parseInt(row.count)
+      clients: parseInt(row.count, 10)
+    })));
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Histórico de compras para o gráfico de linha
+router.get("/purchase-history-by-month", async (req, res, next) => {
+  try {
+    let query = `
+      SELECT
+        TO_CHAR(date_trunc('month', date), 'YYYY-MM') as month,
+        SUM(
+          COALESCE(
+            substring(description from 'R\\$ ([0-9.,]+)')::NUMERIC,
+            0
+          )
+        ) as revenue
+      FROM activities
+      WHERE type = 'note' AND description LIKE 'Nova compra registrada no valor de R$%'
+    `;
+    const params = [];
+
+    if (req.user.role === 'colaborador') {
+        query += ` AND user_id = $1`;
+        params.push(req.user.id);
+    }
+
+    query += ` GROUP BY month ORDER BY month ASC;`;
+    const result = await pool.query(query, params);
+    res.json(result.rows.map(row => ({
+      month: format(parseISO(row.month + '-01'), "MMM/yy", { locale: ptBR }),
+      revenue: parseFloat(row.revenue)
     })));
   } catch (error) {
     next(error);
