@@ -44,9 +44,16 @@ import {
 import { format, isSameDay, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import "react-day-picker/dist/style.css";
+import { useToast } from "@/hooks/use-toast";
 
-// Define color palette for charts
-const COLORS = ["#3b82f6", "#10b981", "#8b5cf6", "#f59e42", "#ef4444"];
+const COLORS = [
+  "#3b82f6",
+  "#10b981",
+  "#f59e0b",
+  "#8b5cf6",
+  "#ef4444",
+  "#ec4899",
+];
 
 type Purchase = {
   client_id: number;
@@ -57,6 +64,9 @@ type Purchase = {
 
 export function ClientAnalyticsDashboard() {
   const [isLoading, setIsLoading] = useState(true);
+  const { toast } = useToast();
+
+  // Estados para cada dado, inicializados como nulos/vazios
   const [ltvData, setLtvData] = useState<any>(null);
   const [mrrData, setMrrData] = useState<any>(null);
   const [specialtyData, setSpecialtyData] = useState<any[]>([]);
@@ -66,10 +76,12 @@ export function ClientAnalyticsDashboard() {
   >([]);
   const [purchasesInMonth, setPurchasesInMonth] = useState<Purchase[]>([]);
   const [displayedSales, setDisplayedSales] = useState<Purchase[]>([]);
+
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [viewMode, setViewMode] = useState<"day" | "month">("day");
   const [isSalesLoading, setIsSalesLoading] = useState(false);
 
+  // Função para buscar as vendas de um mês específico
   const fetchPurchasesForMonth = useCallback(async (date: Date) => {
     setIsSalesLoading(true);
     try {
@@ -84,41 +96,79 @@ export function ClientAnalyticsDashboard() {
     }
   }, []);
 
-  const fetchAllReports = useCallback(async () => {
+  // Função principal que carrega todos os dados do dashboard de forma resiliente
+  const loadDashboardData = useCallback(async () => {
     setIsLoading(true);
-    try {
-      const [ltv, mrr, specialty, byState, history] = await Promise.all([
-        reportsAPI.getLtvAnalysis({ period: "all" }),
-        reportsAPI.getContractsMrr(),
-        reportsAPI.getClientSpecialtyAnalysis({ period: "all" }),
-        reportsAPI.getClientsByState(),
-        reportsAPI.getPurchaseHistoryByMonth(),
-      ]);
-      setLtvData(ltv);
-      setMrrData(mrr);
-      setSpecialtyData(specialty || []);
-      setClientsByState(byState || []);
-      setPurchaseHistory(history || []);
-      await fetchPurchasesForMonth(new Date());
-    } catch (error) {
-      console.error("Erro ao carregar relatórios:", error);
-    } finally {
-      setIsLoading(false);
+
+    // CORREÇÃO: Usando Promise.allSettled para que uma falha não impeça as outras
+    const results = await Promise.allSettled([
+      reportsAPI.getLtvAnalysis({ period: "all" }),
+      reportsAPI.getContractsMrr(),
+      reportsAPI.getClientSpecialtyAnalysis({ period: "all" }),
+      reportsAPI.getClientsByState(),
+      reportsAPI.getPurchaseHistoryByMonth(),
+    ]);
+
+    // Verificando o resultado de cada promessa individualmente
+    if (results[0].status === "fulfilled") {
+      setLtvData(results[0].value);
+    } else {
+      console.error("Falha ao buscar dados de LTV:", results[0].reason);
+      toast({
+        title: "Erro ao buscar LTV",
+        description: "Não foi possível carregar os dados de LTV.",
+        variant: "destructive",
+      });
     }
-  }, [fetchPurchasesForMonth]);
+
+    if (results[1].status === "fulfilled") {
+      setMrrData(results[1].value);
+    } else {
+      console.error("Falha ao buscar dados de MRR:", results[1].reason);
+    }
+
+    if (results[2].status === "fulfilled") {
+      setSpecialtyData(results[2].value || []);
+    } else {
+      console.error(
+        "Falha ao buscar dados de especialidade:",
+        results[2].reason
+      );
+    }
+
+    if (results[3].status === "fulfilled") {
+      setClientsByState(results[3].value || []);
+    } else {
+      console.error("Falha ao buscar dados de localização:", results[3].reason);
+    }
+
+    if (results[4].status === "fulfilled") {
+      setPurchaseHistory(results[4].value || []);
+    } else {
+      console.error("Falha ao buscar histórico de compras:", results[4].reason);
+    }
+
+    await fetchPurchasesForMonth(selectedDate);
+    setIsLoading(false);
+  }, [fetchPurchasesForMonth, selectedDate, toast]);
 
   useEffect(() => {
-    fetchAllReports();
-  }, []);
+    loadDashboardData();
+  }, [loadDashboardData]);
 
+  // Efeito para rebuscar as vendas quando o mês do calendário muda
   useEffect(() => {
-    fetchPurchasesForMonth(selectedDate);
+    const handler = setTimeout(() => {
+      fetchPurchasesForMonth(selectedDate);
+    }, 100);
+    return () => clearTimeout(handler);
   }, [
     selectedDate.getMonth(),
     selectedDate.getFullYear(),
     fetchPurchasesForMonth,
   ]);
 
+  // Efeito para filtrar as vendas a serem exibidas
   useEffect(() => {
     if (viewMode === "month") {
       setDisplayedSales(purchasesInMonth);
@@ -154,7 +204,7 @@ export function ClientAnalyticsDashboard() {
             Entenda o perfil e o valor dos seus clientes
           </p>
         </div>
-        <Button onClick={fetchAllReports} disabled={isLoading}>
+        <Button onClick={loadDashboardData} disabled={isLoading}>
           <RefreshCw
             className={`mr-2 h-4 w-4 ${isLoading ? "animate-spin" : ""}`}
           />
