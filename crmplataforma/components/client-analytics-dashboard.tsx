@@ -27,7 +27,6 @@ import {
   Clock,
   Loader2,
   MapPin,
-  CalendarDays,
   BarChartIcon,
 } from "lucide-react";
 import {
@@ -42,7 +41,7 @@ import {
   LineChart,
   Line,
 } from "recharts";
-import { format, isSameDay } from "date-fns";
+import { format, isSameDay, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import "react-day-picker/dist/style.css";
 
@@ -118,18 +117,24 @@ export function ClientAnalyticsDashboard() {
 
   useEffect(() => {
     fetchAllReports();
-  }, [fetchAllReports]);
+  }, []); // Executa apenas uma vez na montagem
 
+  // Efeito para rebuscar as vendas quando o mês do calendário muda
   useEffect(() => {
     fetchPurchasesForMonth(selectedDate);
-  }, [selectedDate, fetchPurchasesForMonth]);
+  }, [
+    selectedDate.getMonth(),
+    selectedDate.getFullYear(),
+    fetchPurchasesForMonth,
+  ]);
 
+  // Efeito para filtrar as vendas a serem exibidas
   useEffect(() => {
     if (viewMode === "month") {
       setDisplayedSales(purchasesInMonth);
     } else {
       const dailySales = purchasesInMonth.filter((p) =>
-        isSameDay(new Date(p.purchase_date), selectedDate)
+        isSameDay(parseISO(p.purchase_date), selectedDate)
       );
       setDisplayedSales(dailySales);
     }
@@ -166,7 +171,6 @@ export function ClientAnalyticsDashboard() {
           Atualizar Métricas
         </Button>
       </div>
-
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -223,7 +227,6 @@ export function ClientAnalyticsDashboard() {
           </CardContent>
         </Card>
       </div>
-
       <Tabs defaultValue="revenue-calendar" className="w-full">
         <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3">
           <TabsTrigger value="revenue-calendar">
@@ -232,7 +235,6 @@ export function ClientAnalyticsDashboard() {
           <TabsTrigger value="specialty">Análise por Especialidade</TabsTrigger>
           <TabsTrigger value="location">Análise por Localização</TabsTrigger>
         </TabsList>
-
         <TabsContent value="revenue-calendar" className="mt-4 space-y-4">
           <div className="grid gap-6 lg:grid-cols-5">
             <Card className="lg:col-span-2">
@@ -240,7 +242,12 @@ export function ClientAnalyticsDashboard() {
                 <Calendar
                   mode="single"
                   selected={selectedDate}
-                  onSelect={(day) => day && setSelectedDate(day)}
+                  onSelect={(day) => {
+                    if (day) {
+                      setSelectedDate(day);
+                      setViewMode("day");
+                    }
+                  }}
                   onMonthChange={setSelectedDate}
                   locale={ptBR}
                   className="p-0"
@@ -371,7 +378,6 @@ export function ClientAnalyticsDashboard() {
             </CardContent>
           </Card>
         </TabsContent>
-
         <TabsContent value="specialty" className="space-y-4 mt-4">
           <Card>
             <CardHeader>
@@ -385,8 +391,11 @@ export function ClientAnalyticsDashboard() {
                   margin={{ left: 100 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis type="number" />
-                  <YAxis dataKey="specialty" type="category" width={100} />
+                  <XAxis
+                    type="number"
+                    tickFormatter={(value) => value.toString()}
+                  />
+                  <YAxis dataKey="specialty" type="category" width={120} />
                   <Tooltip formatter={(value) => [value, "Clientes"]} />
                   <Bar
                     dataKey="totalClients"
@@ -423,7 +432,6 @@ export function ClientAnalyticsDashboard() {
             </CardContent>
           </Card>
         </TabsContent>
-
         <TabsContent value="location" className="space-y-4 mt-4">
           <Card>
             <CardHeader>
