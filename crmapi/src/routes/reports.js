@@ -343,10 +343,19 @@ router.get("/monthly-sales", async (req, res, next) => {
 // ROTA FINAL: Histórico de compras para o gráfico
 router.get("/reservations-revenue-history", async (req, res, next) => {
   try {
+    // CORREÇÃO: A expressão regular agora trata corretamente os números com vírgula.
     const query = `
       SELECT 
         TO_CHAR(date_trunc('month', date), 'YYYY-MM') as month, 
-        SUM(COALESCE(regexp_replace(substring(description from 'R\\$\\s*([0-9.,]+)'), '[.,]', '', 'g')::NUMERIC, 0)) as revenue 
+        SUM(
+          COALESCE(
+            REPLACE(
+              regexp_replace(substring(description from 'R\\$\\s*([0-9.,]+)'), '\\.', '', 'g'), 
+              ',', '.'
+            )::NUMERIC, 
+            0
+          )
+        ) as revenue 
       FROM activities 
       WHERE type = 'note' AND description LIKE 'Nova compra registrada%' 
       GROUP BY month 
