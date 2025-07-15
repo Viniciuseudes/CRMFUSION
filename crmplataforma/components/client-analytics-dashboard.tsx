@@ -145,8 +145,10 @@ export function ClientAnalyticsDashboard() {
     });
 
     const sortedHistory = Array.from(historyMap.values()).sort((a, b) => {
-      const [monthAStr, yearA] = a.month.split("/");
-      const [monthBStr, yearB] = b.month.split("/");
+      const [monthAStr] = a.month.split("/");
+      const yearA = a.month.slice(-2);
+      const [monthBStr] = b.month.split("/");
+      const yearB = b.month.slice(-2);
       const dateA = new Date(
         parseInt("20" + yearA),
         monthNameToNumber[monthAStr.toLowerCase()]
@@ -389,19 +391,21 @@ export function ClientAnalyticsDashboard() {
                   <YAxis
                     tickFormatter={(value) => `R$${(value / 1000).toFixed(0)}k`}
                   />
+                  {/* CORREÇÃO: Ajustando o nome no Tooltip */}
                   <Tooltip
                     formatter={(value: number, name: string) => [
                       `R$ ${value.toLocaleString("pt-BR", {
                         minimumFractionDigits: 2,
                       })}`,
-                      name === "revenue" ? "Vendas Normais" : "MRR Contratos",
+                      name === "revenue" ? "Vendas de Horas" : "MRR Contratos",
                     ]}
                   />
                   <Legend />
+                  {/* CORREÇÃO: Ajustando o nome na Legenda */}
                   <Line
                     type="monotone"
                     dataKey="revenue"
-                    name="Vendas Normais"
+                    name="Vendas de Horas"
                     stroke="#10b981"
                     strokeWidth={2}
                     activeDot={{ r: 8 }}
@@ -419,6 +423,7 @@ export function ClientAnalyticsDashboard() {
             </CardContent>
           </Card>
         </TabsContent>
+        {/* As outras abas (Specialty, Location) não precisam de alteração */}
         <TabsContent value="specialty" className="space-y-4 mt-4">
           <Card>
             <CardHeader>
