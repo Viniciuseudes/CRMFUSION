@@ -1,7 +1,7 @@
 // crmapi/src/routes/reports.js
 const express = require("express")
 const pool = require("../config/database")
-const { startOfMonth, endOfMonth, subMonths, format, subDays, subWeeks } = require("date-fns")
+const { startOfMonth, endOfMonth, subMonths, format, subDays,parseISO,eachMonthOfInterval, subWeeks } = require("date-fns")
 const { requireRole } = require("../middleware/auth"); // Importando o requireRole
 
 const router = express.Router()
