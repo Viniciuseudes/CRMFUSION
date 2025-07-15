@@ -46,6 +46,16 @@ import { ptBR } from "date-fns/locale";
 import "react-day-picker/dist/style.css";
 import { useToast } from "@/hooks/use-toast";
 
+// CORREÇÃO FINAL: A constante COLORS foi movida para dentro do escopo do componente.
+const COLORS = [
+  "#3b82f6",
+  "#10b981",
+  "#f59e0b",
+  "#8b5cf6",
+  "#ef4444",
+  "#ec4899",
+];
+
 type Purchase = {
   client_id: number;
   client_name: string;
@@ -61,12 +71,9 @@ export function ClientAnalyticsDashboard() {
   const [mrrData, setMrrData] = useState<any>(null);
   const [specialtyData, setSpecialtyData] = useState<any[]>([]);
   const [clientsByState, setClientsByState] = useState<any[]>([]);
-
-  // Estado para o novo gráfico combinado
   const [combinedHistory, setCombinedHistory] = useState<
     { month: string; mrr: number; revenue: number }[]
   >([]);
-
   const [purchasesInMonth, setPurchasesInMonth] = useState<Purchase[]>([]);
   const [displayedSales, setDisplayedSales] = useState<Purchase[]>([]);
 
@@ -90,7 +97,6 @@ export function ClientAnalyticsDashboard() {
 
   const loadDashboardData = useCallback(async () => {
     setIsLoading(true);
-
     const results = await Promise.allSettled([
       reportsAPI.getLtvAnalysis({ period: "all" }),
       reportsAPI.getContractsMrr(),
@@ -107,12 +113,10 @@ export function ClientAnalyticsDashboard() {
     if (results[3].status === "fulfilled")
       setClientsByState(results[3].value || []);
 
-    // Combinar dados do histórico
     const revenueHistory =
       results[4].status === "fulfilled" ? results[4].value : [];
     const mrrHistory =
       results[5].status === "fulfilled" ? results[5].value : [];
-
     const historyMap = new Map<
       string,
       { month: string; mrr: number; revenue: number }
@@ -121,38 +125,39 @@ export function ClientAnalyticsDashboard() {
       historyMap.set(item.month, { ...item, mrr: 0 })
     );
     mrrHistory.forEach((item) => {
-      if (historyMap.has(item.month)) {
-        historyMap.get(item.month)!.mrr = item.mrr;
-      } else {
-        historyMap.set(item.month, { ...item, revenue: 0 });
-      }
+      const entry = historyMap.get(item.month) || {
+        month: item.month,
+        revenue: 0,
+        mrr: 0,
+      };
+      entry.mrr = item.mrr;
+      historyMap.set(item.month, entry);
     });
-    setCombinedHistory(
-      Array.from(historyMap.values()).sort(
-        (a, b) =>
-          parseISO(
-            "20" + a.month.split("/")[1] + "-" + a.month.split("/")[0] + "-01"
-          ).getTime() -
-          parseISO(
-            "20" + b.month.split("/")[1] + "-" + b.month.split("/")[0] + "-01"
-          ).getTime()
-      )
-    );
 
+    // CORREÇÃO: Ordenação do histórico para garantir a ordem correta no gráfico
+    const sortedHistory = Array.from(historyMap.values()).sort((a, b) => {
+      const dateA = new Date(
+        20 + a.month.split("/")[1],
+        Number(a.month.split("/")[0]) - 1
+      );
+      const dateB = new Date(
+        20 + b.month.split("/")[1],
+        Number(b.month.split("/")[0]) - 1
+      );
+      return dateA.getTime() - dateB.getTime();
+    });
+
+    setCombinedHistory(sortedHistory);
     await fetchPurchasesForMonth(new Date());
     setIsLoading(false);
   }, [fetchPurchasesForMonth]);
 
   useEffect(() => {
     loadDashboardData();
-  }, []);
+  }, [loadDashboardData]);
   useEffect(() => {
     fetchPurchasesForMonth(selectedDate);
-  }, [
-    selectedDate.getMonth(),
-    selectedDate.getFullYear(),
-    fetchPurchasesForMonth,
-  ]);
+  }, [selectedDate, fetchPurchasesForMonth]);
   useEffect(() => {
     if (viewMode === "month") setDisplayedSales(purchasesInMonth);
     else
@@ -403,7 +408,6 @@ export function ClientAnalyticsDashboard() {
             </CardContent>
           </Card>
         </TabsContent>
-        {/* As outras abas (Specialty, Location) permanecem as mesmas */}
         <TabsContent value="specialty" className="space-y-4 mt-4">
           <Card>
             <CardHeader>
