@@ -27,7 +27,6 @@ import {
   Clock,
   Loader2,
   MapPin,
-  CalendarDays,
 } from "lucide-react";
 import {
   BarChart,
@@ -41,11 +40,11 @@ import {
   Pie,
   Cell,
   Legend,
+  LineChart,
+  Line,
 } from "recharts";
-import { format } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
-
-// --- IMPORTAÇÃO ESSENCIAL PARA ESTILIZAR O CALENDÁRIO ---
 import "react-day-picker/dist/style.css";
 
 const COLORS = [
@@ -55,9 +54,6 @@ const COLORS = [
   "#8b5cf6",
   "#ef4444",
   "#ec4899",
-  "#6b7280",
-  "#22d3ee",
-  "#f97316",
 ];
 
 type MonthlySale = {
@@ -68,27 +64,26 @@ type MonthlySale = {
 
 export function ClientAnalyticsDashboard() {
   const [isLoading, setIsLoading] = useState(true);
-
-  // CORREÇÃO: Inicializando os estados como nulos ou vazios para evitar dados "fantasmas"
   const [ltvData, setLtvData] = useState<any>(null);
   const [mrrData, setMrrData] = useState<any>(null);
   const [specialtyData, setSpecialtyData] = useState<any[]>([]);
   const [clientsByState, setClientsByState] = useState<any[]>([]);
   const [monthlySales, setMonthlySales] = useState<MonthlySale[]>([]);
-
+  const [purchaseHistory, setPurchaseHistory] = useState<
+    { month: string; revenue: number }[]
+  >([]);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [isSalesLoading, setIsSalesLoading] = useState(false);
 
-  // CORREÇÃO: Função para buscar vendas mensais, agora chamada explicitamente
   const fetchMonthlySales = useCallback(async (date: Date) => {
     setIsSalesLoading(true);
     try {
       const monthString = format(date, "yyyy-MM");
       const sales = await reportsAPI.getMonthlySales(monthString);
-      setMonthlySales(sales || []); // Garante que seja um array
+      setMonthlySales(sales || []);
     } catch (error) {
       console.error("Erro ao carregar vendas do mês:", error);
-      setMonthlySales([]); // Limpa em caso de erro
+      setMonthlySales([]);
     } finally {
       setIsSalesLoading(false);
     }
@@ -97,17 +92,18 @@ export function ClientAnalyticsDashboard() {
   const fetchAllReports = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [ltv, mrr, specialty, byState] = await Promise.all([
+      const [ltv, mrr, specialty, byState, history] = await Promise.all([
         reportsAPI.getLtvAnalysis({ period: "all" }),
         reportsAPI.getContractsMrr(),
         reportsAPI.getClientSpecialtyAnalysis({ period: "all" }),
         reportsAPI.getClientsByState(),
+        reportsAPI.getPurchaseHistoryByMonth(),
       ]);
       setLtvData(ltv);
       setMrrData(mrr);
       setSpecialtyData(specialty || []);
       setClientsByState(byState || []);
-      // CORREÇÃO: Chama a busca de vendas após carregar os relatórios principais
+      setPurchaseHistory(history || []);
       await fetchMonthlySales(selectedDate);
     } catch (error) {
       console.error("Erro ao carregar relatórios:", error);
@@ -120,7 +116,6 @@ export function ClientAnalyticsDashboard() {
     fetchAllReports();
   }, [fetchAllReports]);
 
-  // CORREÇÃO: Efeito separado para lidar com a mudança de data no calendário
   useEffect(() => {
     fetchMonthlySales(selectedDate);
   }, [selectedDate, fetchMonthlySales]);
@@ -129,7 +124,6 @@ export function ClientAnalyticsDashboard() {
     return (
       <div className="flex h-full w-full items-center justify-center">
         <Loader2 className="h-12 w-12 animate-spin text-blue-600" />
-        <p className="ml-4 text-lg">Carregando análise de clientes...</p>
       </div>
     );
   }
@@ -167,9 +161,8 @@ export function ClientAnalyticsDashboard() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            {/* CORREÇÃO: Acessando a propriedade correta (totalClients) */}
             <div className="text-2xl font-bold">
-              {ltvData?.totalClients?.toLocaleString() || "0"}
+              {ltvData?.totalClients?.toLocaleString("pt-BR") || "0"}
             </div>
             <p className="text-xs text-muted-foreground">
               Clientes cadastrados na base
@@ -182,7 +175,6 @@ export function ClientAnalyticsDashboard() {
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            {/* CORREÇÃO: Acessando a propriedade correta (averageLTV) */}
             <div className="text-2xl font-bold">
               R${" "}
               {Number(ltvData?.averageLTV || 0).toLocaleString("pt-BR", {
@@ -226,19 +218,17 @@ export function ClientAnalyticsDashboard() {
           <TabsTrigger value="location">Análise por Localização</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="revenue-calendar" className="mt-4">
+        <TabsContent value="revenue-calendar" className="mt-4 space-y-4">
           <div className="grid gap-6 lg:grid-cols-5">
             <Card className="lg:col-span-2 flex flex-col items-center justify-center p-2">
               <Calendar
                 mode="single"
                 selected={selectedDate}
                 onSelect={(day) => day && setSelectedDate(day)}
-                onMonthChange={(month) => setSelectedDate(month)} // Apenas atualiza a data selecionada
                 locale={ptBR}
                 className="p-0"
               />
             </Card>
-
             <Card className="lg:col-span-3">
               <CardHeader>
                 <CardTitle>
@@ -303,68 +293,84 @@ export function ClientAnalyticsDashboard() {
               </CardContent>
             </Card>
           </div>
+          <Card>
+            <CardHeader>
+              <CardTitle>Histórico de Receita de Reservas</CardTitle>
+            </CardHeader>
+            <CardContent className="pl-2">
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart
+                  data={purchaseHistory}
+                  margin={{ top: 5, right: 20, left: 10, bottom: 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="month" />
+                  <YAxis
+                    tickFormatter={(value) => `R$${(value / 1000).toFixed(0)}k`}
+                  />
+                  <Tooltip
+                    formatter={(value: number) => [
+                      `R$ ${value.toLocaleString("pt-BR", {
+                        minimumFractionDigits: 2,
+                      })}`,
+                      "Receita",
+                    ]}
+                  />
+                  <Legend />
+                  <Line
+                    type="monotone"
+                    dataKey="revenue"
+                    name="Receita"
+                    stroke="#10b981"
+                    strokeWidth={2}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="specialty" className="space-y-4 mt-4">
           <Card>
             <CardHeader>
               <CardTitle>Clientes por Especialidade</CardTitle>
-              <CardDescription>
-                Distribuição de clientes e receita por especialidade.
-              </CardDescription>
             </CardHeader>
             <CardContent className="pl-2">
               <ResponsiveContainer width="100%" height={350}>
-                <PieChart>
-                  <Pie
-                    data={specialtyData}
+                <BarChart
+                  data={specialtyData}
+                  layout="vertical"
+                  margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis type="number" />
+                  <YAxis dataKey="specialty" type="category" width={120} />
+                  <Tooltip formatter={(value) => [value, "Clientes"]} />
+                  <Bar
                     dataKey="totalClients"
-                    nameKey="specialty"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={120}
-                    label={({ specialty, totalClients, percent }) =>
-                      `${specialty} (${totalClients}) ${(percent * 100).toFixed(
-                        0
-                      )}%`
-                    }
-                    fill="#8884d8"
-                  >
-                    {specialtyData.map((entry, index) => (
-                      <Cell
-                        key={`cell-${index}`}
-                        fill={COLORS[index % COLORS.length]}
-                      />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    formatter={(value: number, name, props) => [
-                      `${value} clientes`,
-                      props.payload.specialty,
-                    ]}
+                    name="Nº de Clientes"
+                    fill="#3b82f6"
                   />
-                  <Legend />
-                </PieChart>
+                </BarChart>
               </ResponsiveContainer>
             </CardContent>
           </Card>
-
           <Card>
             <CardHeader>
               <CardTitle>Receita por Especialidade</CardTitle>
-              <CardDescription>
-                Total de receita gerada por cada especialidade.
-              </CardDescription>
             </CardHeader>
             <CardContent className="pl-2">
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={specialtyData}>
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="specialty" />
+                  <XAxis
+                    dataKey="specialty"
+                    angle={-45}
+                    textAnchor="end"
+                    height={80}
+                  />
                   <YAxis
-                    tickFormatter={(value) =>
-                      `R$ ${value.toLocaleString("pt-BR")}`
-                    }
+                    tickFormatter={(value) => `R$${(value / 1000).toFixed(0)}k`}
                   />
                   <Tooltip
                     formatter={(value: number) => [
@@ -372,8 +378,7 @@ export function ClientAnalyticsDashboard() {
                       "Receita Total",
                     ]}
                   />
-                  <Legend />
-                  <Bar dataKey="totalRevenue" fill={COLORS[1]} />
+                  <Bar dataKey="totalRevenue" name="Receita" fill={COLORS[1]} />
                 </BarChart>
               </ResponsiveContainer>
             </CardContent>
@@ -387,22 +392,15 @@ export function ClientAnalyticsDashboard() {
                 <MapPin className="h-5 w-5" />
                 Clientes por Estado
               </CardTitle>
-              <CardDescription>
-                Distribuição geográfica dos seus clientes pelo Brasil.
-              </CardDescription>
             </CardHeader>
             <CardContent className="pl-2">
               <ResponsiveContainer width="100%" height={400}>
-                <BarChart
-                  data={clientsByState}
-                  margin={{ top: 5, right: 20, left: 10, bottom: 5 }}
-                >
+                <BarChart data={clientsByState}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="state" />
                   <YAxis allowDecimals={false} />
                   <Tooltip formatter={(value: number) => [value, "Clientes"]} />
-                  <Legend />
-                  <Bar dataKey="clients" name="Nº de Clientes" fill="#8884d8" />
+                  <Bar dataKey="clients" name="Nº de Clientes" fill="#8b5cf6" />
                 </BarChart>
               </ResponsiveContainer>
             </CardContent>
