@@ -27,6 +27,8 @@ import {
   Clock,
   Loader2,
   MapPin,
+  CalendarDays,
+  BarChartIcon,
 } from "lucide-react";
 import {
   BarChart,
@@ -36,14 +38,11 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
   Legend,
   LineChart,
   Line,
 } from "recharts";
-import { format, parseISO } from "date-fns";
+import { format, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import "react-day-picker/dist/style.css";
 
@@ -56,10 +55,11 @@ const COLORS = [
   "#ec4899",
 ];
 
-type MonthlySale = {
+type Purchase = {
   client_id: number;
   client_name: string;
-  total_spent_in_month: number;
+  purchase_date: string;
+  purchase_value: number;
 };
 
 export function ClientAnalyticsDashboard() {
@@ -68,22 +68,26 @@ export function ClientAnalyticsDashboard() {
   const [mrrData, setMrrData] = useState<any>(null);
   const [specialtyData, setSpecialtyData] = useState<any[]>([]);
   const [clientsByState, setClientsByState] = useState<any[]>([]);
-  const [monthlySales, setMonthlySales] = useState<MonthlySale[]>([]);
   const [purchaseHistory, setPurchaseHistory] = useState<
     { month: string; revenue: number }[]
   >([]);
+
+  const [purchasesInMonth, setPurchasesInMonth] = useState<Purchase[]>([]);
+  const [displayedSales, setDisplayedSales] = useState<Purchase[]>([]);
+
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [viewMode, setViewMode] = useState<"day" | "month">("day");
   const [isSalesLoading, setIsSalesLoading] = useState(false);
 
-  const fetchMonthlySales = useCallback(async (date: Date) => {
+  const fetchPurchasesForMonth = useCallback(async (date: Date) => {
     setIsSalesLoading(true);
     try {
       const monthString = format(date, "yyyy-MM");
       const sales = await reportsAPI.getMonthlySales(monthString);
-      setMonthlySales(sales || []);
+      setPurchasesInMonth(sales || []);
     } catch (error) {
       console.error("Erro ao carregar vendas do mês:", error);
-      setMonthlySales([]);
+      setPurchasesInMonth([]);
     } finally {
       setIsSalesLoading(false);
     }
@@ -104,21 +108,32 @@ export function ClientAnalyticsDashboard() {
       setSpecialtyData(specialty || []);
       setClientsByState(byState || []);
       setPurchaseHistory(history || []);
-      await fetchMonthlySales(selectedDate);
+      await fetchPurchasesForMonth(selectedDate);
     } catch (error) {
       console.error("Erro ao carregar relatórios:", error);
     } finally {
       setIsLoading(false);
     }
-  }, [fetchMonthlySales, selectedDate]);
+  }, [fetchPurchasesForMonth, selectedDate]);
 
   useEffect(() => {
     fetchAllReports();
   }, [fetchAllReports]);
 
   useEffect(() => {
-    fetchMonthlySales(selectedDate);
-  }, [selectedDate, fetchMonthlySales]);
+    fetchPurchasesForMonth(selectedDate);
+  }, [selectedDate, fetchPurchasesForMonth]);
+
+  useEffect(() => {
+    if (viewMode === "month") {
+      setDisplayedSales(purchasesInMonth);
+    } else {
+      const dailySales = purchasesInMonth.filter((p) =>
+        isSameDay(new Date(p.purchase_date), selectedDate)
+      );
+      setDisplayedSales(dailySales);
+    }
+  }, [viewMode, purchasesInMonth, selectedDate]);
 
   if (isLoading) {
     return (
@@ -128,8 +143,8 @@ export function ClientAnalyticsDashboard() {
     );
   }
 
-  const totalSalesInMonth = monthlySales.reduce(
-    (sum, sale) => sum + Number(sale.total_spent_in_month),
+  const totalDisplayedSales = displayedSales.reduce(
+    (sum, sale) => sum + Number(sale.purchase_value),
     0
   );
 
@@ -220,82 +235,108 @@ export function ClientAnalyticsDashboard() {
 
         <TabsContent value="revenue-calendar" className="mt-4 space-y-4">
           <div className="grid gap-6 lg:grid-cols-5">
-            <Card className="lg:col-span-2 flex flex-col items-center justify-center p-2">
-              <Calendar
-                mode="single"
-                selected={selectedDate}
-                onSelect={(day) => day && setSelectedDate(day)}
-                locale={ptBR}
-                className="p-0"
-              />
+            <Card className="lg:col-span-2">
+              <CardContent className="p-2 flex justify-center">
+                <Calendar
+                  mode="single"
+                  selected={selectedDate}
+                  onSelect={(day) => day && setSelectedDate(day)}
+                  onMonthChange={setSelectedDate}
+                  locale={ptBR}
+                  className="p-0"
+                />
+              </CardContent>
             </Card>
             <Card className="lg:col-span-3">
               <CardHeader>
-                <CardTitle>
-                  Vendas em{" "}
-                  {format(selectedDate, "MMMM yyyy", { locale: ptBR })}
-                </CardTitle>
-                <CardDescription>
-                  Total vendido no mês:{" "}
-                  <span className="font-bold text-primary">
-                    R${" "}
-                    {totalSalesInMonth.toLocaleString("pt-BR", {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}
-                  </span>
-                </CardDescription>
+                <div className="flex justify-between items-start">
+                  <div>
+                    <CardTitle>
+                      Vendas em{" "}
+                      {viewMode === "day"
+                        ? format(selectedDate, "dd 'de' MMMM", { locale: ptBR })
+                        : format(selectedDate, "MMMM yyyy", { locale: ptBR })}
+                    </CardTitle>
+                    <CardDescription>
+                      Total vendido:{" "}
+                      <span className="font-bold text-primary">
+                        R${" "}
+                        {totalDisplayedSales.toLocaleString("pt-BR", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
+                      </span>
+                    </CardDescription>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      setViewMode(viewMode === "day" ? "month" : "day")
+                    }
+                  >
+                    {viewMode === "day"
+                      ? "Ver Mês Inteiro"
+                      : "Ver Dia Selecionado"}
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent>
-                {isSalesLoading ? (
-                  <div className="flex justify-center items-center h-40">
-                    <Loader2 className="h-6 w-6 animate-spin" />
-                  </div>
-                ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Cliente</TableHead>
-                        <TableHead className="text-right">
-                          Valor Gasto
-                        </TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {monthlySales.length > 0 ? (
-                        monthlySales.map((sale) => (
-                          <TableRow key={sale.client_id}>
-                            <TableCell className="font-medium">
-                              {sale.client_name}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              R${" "}
-                              {Number(sale.total_spent_in_month).toLocaleString(
-                                "pt-BR",
-                                {
-                                  minimumFractionDigits: 2,
-                                  maximumFractionDigits: 2,
-                                }
-                              )}
+                <div className="h-[350px] overflow-y-auto">
+                  {isSalesLoading ? (
+                    <div className="flex justify-center items-center h-full">
+                      <Loader2 className="h-6 w-6 animate-spin" />
+                    </div>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Cliente</TableHead>
+                          <TableHead className="text-right">
+                            Valor Gasto
+                          </TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {displayedSales.length > 0 ? (
+                          displayedSales.map((sale, index) => (
+                            <TableRow key={`${sale.client_id}-${index}`}>
+                              <TableCell className="font-medium">
+                                {sale.client_name}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                R${" "}
+                                {Number(sale.purchase_value).toLocaleString(
+                                  "pt-BR",
+                                  {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2,
+                                  }
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        ) : (
+                          <TableRow>
+                            <TableCell colSpan={2} className="text-center h-24">
+                              Nenhuma venda registrada para{" "}
+                              {viewMode === "day" ? "este dia" : "este mês"}.
                             </TableCell>
                           </TableRow>
-                        ))
-                      ) : (
-                        <TableRow>
-                          <TableCell colSpan={2} className="text-center h-24">
-                            Nenhuma venda registrada para este mês.
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
-                )}
+                        )}
+                      </TableBody>
+                    </Table>
+                  )}
+                </div>
               </CardContent>
             </Card>
           </div>
           <Card>
             <CardHeader>
-              <CardTitle>Histórico de Receita de Reservas</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <BarChartIcon className="h-5 w-5" /> Histórico de Receita de
+                Reservas
+              </CardTitle>
             </CardHeader>
             <CardContent className="pl-2">
               <ResponsiveContainer width="100%" height={300}>
@@ -323,6 +364,7 @@ export function ClientAnalyticsDashboard() {
                     name="Receita"
                     stroke="#10b981"
                     strokeWidth={2}
+                    activeDot={{ r: 8 }}
                   />
                 </LineChart>
               </ResponsiveContainer>
@@ -340,11 +382,11 @@ export function ClientAnalyticsDashboard() {
                 <BarChart
                   data={specialtyData}
                   layout="vertical"
-                  margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                  margin={{ left: 100 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis type="number" />
-                  <YAxis dataKey="specialty" type="category" width={120} />
+                  <YAxis dataKey="specialty" type="category" width={100} />
                   <Tooltip formatter={(value) => [value, "Clientes"]} />
                   <Bar
                     dataKey="totalClients"
@@ -363,18 +405,15 @@ export function ClientAnalyticsDashboard() {
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={specialtyData}>
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis
-                    dataKey="specialty"
-                    angle={-45}
-                    textAnchor="end"
-                    height={80}
-                  />
+                  <XAxis dataKey="specialty" />
                   <YAxis
                     tickFormatter={(value) => `R$${(value / 1000).toFixed(0)}k`}
                   />
                   <Tooltip
                     formatter={(value: number) => [
-                      `R$ ${value.toLocaleString("pt-BR")}`,
+                      `R$ ${value.toLocaleString("pt-BR", {
+                        minimumFractionDigits: 2,
+                      })}`,
                       "Receita Total",
                     ]}
                   />

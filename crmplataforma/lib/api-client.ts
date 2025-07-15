@@ -514,7 +514,7 @@ export const reportsAPI = {
     const response = await apiClient.get("/reports/purchase-history");
     return response.data;
   },
-  
+
   getPurchaseHistoryByMonth: async (): Promise<{ month: string, revenue: number }[]> => {
     const response = await apiClient.get("/reports/purchase-history-by-month");
     return response.data;
@@ -525,7 +525,7 @@ export const reportsAPI = {
     return response.data;
   },
 
-  getMonthlySales: async (month: string): Promise<{ client_id: number; client_name: string; total_spent_in_month: number }[]> => {
+ getMonthlySales: async (month: string): Promise<{ client_id: number; client_name: string; purchase_date: string; purchase_value: number }[]> => {
     const response = await apiClient.get("/reports/monthly-sales", { params: { month } });
     return response.data;
   },
