@@ -45,14 +45,8 @@ import { format, isSameDay, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import "react-day-picker/dist/style.css";
 
-const COLORS = [
-  "#3b82f6",
-  "#10b981",
-  "#f59e0b",
-  "#8b5cf6",
-  "#ef4444",
-  "#ec4899",
-];
+// Define color palette for charts
+const COLORS = ["#3b82f6", "#10b981", "#8b5cf6", "#f59e42", "#ef4444"];
 
 type Purchase = {
   client_id: number;
@@ -70,10 +64,8 @@ export function ClientAnalyticsDashboard() {
   const [purchaseHistory, setPurchaseHistory] = useState<
     { month: string; revenue: number }[]
   >([]);
-
   const [purchasesInMonth, setPurchasesInMonth] = useState<Purchase[]>([]);
   const [displayedSales, setDisplayedSales] = useState<Purchase[]>([]);
-
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [viewMode, setViewMode] = useState<"day" | "month">("day");
   const [isSalesLoading, setIsSalesLoading] = useState(false);
@@ -107,19 +99,18 @@ export function ClientAnalyticsDashboard() {
       setSpecialtyData(specialty || []);
       setClientsByState(byState || []);
       setPurchaseHistory(history || []);
-      await fetchPurchasesForMonth(selectedDate);
+      await fetchPurchasesForMonth(new Date());
     } catch (error) {
       console.error("Erro ao carregar relatórios:", error);
     } finally {
       setIsLoading(false);
     }
-  }, [fetchPurchasesForMonth, selectedDate]);
+  }, [fetchPurchasesForMonth]);
 
   useEffect(() => {
     fetchAllReports();
-  }, []); // Executa apenas uma vez na montagem
+  }, []);
 
-  // Efeito para rebuscar as vendas quando o mês do calendário muda
   useEffect(() => {
     fetchPurchasesForMonth(selectedDate);
   }, [
@@ -128,7 +119,6 @@ export function ClientAnalyticsDashboard() {
     fetchPurchasesForMonth,
   ]);
 
-  // Efeito para filtrar as vendas a serem exibidas
   useEffect(() => {
     if (viewMode === "month") {
       setDisplayedSales(purchasesInMonth);
@@ -171,6 +161,7 @@ export function ClientAnalyticsDashboard() {
           Atualizar Métricas
         </Button>
       </div>
+
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -227,6 +218,7 @@ export function ClientAnalyticsDashboard() {
           </CardContent>
         </Card>
       </div>
+
       <Tabs defaultValue="revenue-calendar" className="w-full">
         <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3">
           <TabsTrigger value="revenue-calendar">
