@@ -273,32 +273,36 @@ router.get("/client-specialty-analysis", async (req, res, next) => {
 // Análise de Lifetime Value (LTV) - CORRIGIDA
 router.get("/ltv-analysis", async (req, res, next) => {
   try {
-    const { period = "all" } = req.query;
-    let query = `
-      SELECT 
-        COUNT(id) as total_clients,
-        COALESCE(SUM(total_spent), 0) as total_lifetime_revenue,
-        COALESCE(AVG(EXTRACT(DAY FROM (CURRENT_DATE - entry_date))), 0) as avg_client_days
-      FROM clients c WHERE 1=1
-    `;
+    let query = "SELECT id, total_spent, entry_date FROM clients c";
     const params = [];
 
-    if (period !== "all") {
-      query += ` AND c.created_at >= $${params.length + 1}`;
-      params.push(getStartDate(period));
-    }
-
+    // Aplica filtro de permissão
     if (req.user.role === 'colaborador') {
-      query += ` AND c.assigned_to = $${params.length + 1}`;
+      query += ` WHERE c.assigned_to = $1`;
       params.push(req.user.id);
     }
+    
+    const { rows: clients } = await pool.query(query, params);
 
-    const result = await pool.query(query, params);
+    const totalClients = clients.length;
+    
+    if (totalClients === 0) {
+      return res.json({
+        totalClients: 0,
+        totalLifetimeRevenue: 0,
+        averageLTV: 0,
+        avgClientLifespanDays: 0,
+      });
+    }
 
-    const data = result.rows[0];
-    const totalClients = parseInt(data.total_clients || '0', 10);
-    const totalLifetimeRevenue = parseFloat(data.total_lifetime_revenue || '0');
-    const avgClientLifespanDays = parseFloat(data.avg_client_days || '0');
+    const totalLifetimeRevenue = clients.reduce((sum, client) => sum + parseFloat(client.total_spent || '0'), 0);
+    
+    const totalDaysAsClient = clients.reduce((sum, client) => {
+      const days = (new Date() - new Date(client.entry_date)) / (1000 * 60 * 60 * 24);
+      return sum + days;
+    }, 0);
+
+    const avgClientLifespanDays = totalClients > 0 ? totalDaysAsClient / totalClients : 0;
     const averageLTV = totalClients > 0 ? totalLifetimeRevenue / totalClients : 0;
 
     res.json({
@@ -308,13 +312,30 @@ router.get("/ltv-analysis", async (req, res, next) => {
       avgClientLifespanDays: Math.round(avgClientLifespanDays),
     });
   } catch (error) {
+    console.error("ERRO DETALHADO em /ltv-analysis:", error);
     next(error);
   }
 });
 
-
 // MRR de Contratos - CORRIGIDA
 router.get("/mrr-contracts", async (req, res, next) => {
+  try {
+    let query = `
+      SELECT COALESCE(SUM(monthly_value), 0) as current_mrr
+      FROM contracts
+      WHERE status = 'ativo' AND CURRENT_DATE BETWEEN start_date AND end_date
+    `;
+    const params = [];
+    if (req.user.role === 'colaborador') {
+      query += ` AND created_by = $1`;
+      params.push(req.user.id);
+    }
+    const result = await pool.query(query, params);
+    res.json(result.rows[0]);
+  } catch (error) {
+    next(error);
+  }
+});router.get("/mrr-contracts", async (req, res, next) => {
   try {
     let query = `
       SELECT COALESCE(SUM(monthly_value), 0) as current_mrr
