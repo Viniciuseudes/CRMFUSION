@@ -344,7 +344,7 @@ router.get("/monthly-sales", async (req, res, next) => {
 router.get("/reservations-revenue-history", async (req, res, next) => {
   try {
     const { rows } = await pool.query(
-      "SELECT TO_CHAR(date_trunc('month', date), 'YYYY-MM') as month, SUM(COALESCE(substring(description from 'R\\\\$ *([0-9.,]+)')::NUMERIC, 0)) as revenue FROM activities WHERE type = 'note' AND description LIKE 'Nova compra registrada%' GROUP BY month ORDER BY month ASC"
+      "SELECT TO_CHAR(date_trunc('month', date), 'YYYY-MM') as month, SUM(COALESCE(regexp_replace(substring(description from 'R\\$\\s*([0-9.,]+)'), '[.,]', '', 'g')::NUMERIC, 0)) as revenue FROM activities WHERE type = 'note' AND description LIKE 'Nova compra registrada%' GROUP BY month ORDER BY month ASC"
     );
     res.json(rows.map(row => ({
       month: format(parseISO(row.month + '-01'), "MMM/yy", { locale: ptBR }),
@@ -355,22 +355,22 @@ router.get("/reservations-revenue-history", async (req, res, next) => {
   }
 });
 
+
 router.get("/mrr-history", async (req, res, next) => {
   try {
     const { rows: contracts } = await pool.query("SELECT start_date, end_date, monthly_value FROM contracts WHERE status = 'ativo'");
-    
-    if (contracts.length === 0) {
-      return res.json([]);
-    }
+    if (contracts.length === 0) return res.json([]);
 
-    const firstDate = new Date(Math.min(...contracts.map(c => new Date(c.start_date))));
-    const lastDate = new Date();
-    const interval = eachMonthOfInterval({ start: firstDate, end: lastDate });
+    const firstDate = new Date('2025-07-01'); // Início fixo em Julho de 2025
+    const lastContractEndDate = new Date(Math.max(...contracts.map(c => new Date(c.end_date))));
+    
+    // O intervalo do gráfico vai de Julho de 2025 até a data final do último contrato
+    const interval = eachMonthOfInterval({ start: firstDate, end: lastContractEndDate });
 
     const history = interval.map(monthDate => {
       const mrrForMonth = contracts.reduce((sum, contract) => {
-        const start = new Date(contract.start_date);
-        const end = new Date(contract.end_date);
+        const start = startOfMonth(new Date(contract.start_date));
+        const end = startOfMonth(new Date(contract.end_date));
         if (monthDate >= start && monthDate <= end) {
           return sum + parseFloat(contract.monthly_value);
         }
@@ -387,6 +387,7 @@ router.get("/mrr-history", async (req, res, next) => {
     next(error);
   }
 });
+
 
 
 
