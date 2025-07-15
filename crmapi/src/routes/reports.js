@@ -340,21 +340,12 @@ router.get("/monthly-sales", async (req, res, next) => {
 });
 
 // ROTA FINAL: Histórico de compras para o gráfico
-router.get("/purchase-history-by-month", async (req, res, next) => {
+router.get("/reservations-revenue-history", async (req, res, next) => {
   try {
-    let query = `
-      SELECT TO_CHAR(date_trunc('month', date), 'YYYY-MM') as month,
-             SUM(COALESCE(substring(description from 'R\\$ *([0-9.,]+)')::NUMERIC, 0)) as revenue
-      FROM activities WHERE type = 'note' AND description LIKE 'Nova compra registrada%'
-    `;
-    const params = [];
-    if (req.user.role === 'colaborador') {
-      query += ` AND user_id = $1`;
-      params.push(req.user.id);
-    }
-    query += ` GROUP BY month ORDER BY month ASC;`;
-    const result = await pool.query(query, params);
-    res.json(result.rows.map(row => ({
+    const { rows } = await pool.query(
+      "SELECT TO_CHAR(date_trunc('month', date), 'YYYY-MM') as month, SUM(COALESCE(substring(description from 'R\\\\$ *([0-9.,]+)')::NUMERIC, 0)) as revenue FROM activities WHERE type = 'note' AND description LIKE 'Nova compra registrada%' GROUP BY month ORDER BY month ASC"
+    );
+    res.json(rows.map(row => ({
       month: format(parseISO(row.month + '-01'), "MMM/yy", { locale: ptBR }),
       revenue: parseFloat(row.revenue)
     })));
@@ -362,6 +353,41 @@ router.get("/purchase-history-by-month", async (req, res, next) => {
     next(error);
   }
 });
+
+router.get("/mrr-history", async (req, res, next) => {
+  try {
+    const { rows: contracts } = await pool.query("SELECT start_date, end_date, monthly_value FROM contracts WHERE status = 'ativo'");
+    
+    if (contracts.length === 0) {
+      return res.json([]);
+    }
+
+    const firstDate = new Date(Math.min(...contracts.map(c => new Date(c.start_date))));
+    const lastDate = new Date();
+    const interval = eachMonthOfInterval({ start: firstDate, end: lastDate });
+
+    const history = interval.map(monthDate => {
+      const mrrForMonth = contracts.reduce((sum, contract) => {
+        const start = new Date(contract.start_date);
+        const end = new Date(contract.end_date);
+        if (monthDate >= start && monthDate <= end) {
+          return sum + parseFloat(contract.monthly_value);
+        }
+        return sum;
+      }, 0);
+      return {
+        month: format(monthDate, "MMM/yy", { locale: ptBR }),
+        mrr: mrrForMonth,
+      };
+    });
+
+    res.json(history);
+  } catch (error) {
+    next(error);
+  }
+});
+
+
 
 // ROTA FINAL: Clientes por Estado
 router.get("/clients-by-state", async (req, res, next) => {
