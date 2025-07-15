@@ -46,15 +46,6 @@ import { ptBR } from "date-fns/locale";
 import "react-day-picker/dist/style.css";
 import { useToast } from "@/hooks/use-toast";
 
-const COLORS = [
-  "#3b82f6",
-  "#10b981",
-  "#f59e0b",
-  "#8b5cf6",
-  "#ef4444",
-  "#ec4899",
-];
-
 type Purchase = {
   client_id: number;
   client_name: string;
@@ -66,14 +57,16 @@ export function ClientAnalyticsDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
-  // Estados para cada dado, inicializados como nulos/vazios
   const [ltvData, setLtvData] = useState<any>(null);
   const [mrrData, setMrrData] = useState<any>(null);
   const [specialtyData, setSpecialtyData] = useState<any[]>([]);
   const [clientsByState, setClientsByState] = useState<any[]>([]);
-  const [purchaseHistory, setPurchaseHistory] = useState<
-    { month: string; revenue: number }[]
+
+  // Estado para o novo gráfico combinado
+  const [combinedHistory, setCombinedHistory] = useState<
+    { month: string; mrr: number; revenue: number }[]
   >([]);
+
   const [purchasesInMonth, setPurchasesInMonth] = useState<Purchase[]>([]);
   const [displayedSales, setDisplayedSales] = useState<Purchase[]>([]);
 
@@ -81,7 +74,6 @@ export function ClientAnalyticsDashboard() {
   const [viewMode, setViewMode] = useState<"day" | "month">("day");
   const [isSalesLoading, setIsSalesLoading] = useState(false);
 
-  // Função para buscar as vendas de um mês específico
   const fetchPurchasesForMonth = useCallback(async (date: Date) => {
     setIsSalesLoading(true);
     try {
@@ -96,97 +88,87 @@ export function ClientAnalyticsDashboard() {
     }
   }, []);
 
-  // Função principal que carrega todos os dados do dashboard de forma resiliente
   const loadDashboardData = useCallback(async () => {
     setIsLoading(true);
 
-    // CORREÇÃO: Usando Promise.allSettled para que uma falha não impeça as outras
     const results = await Promise.allSettled([
       reportsAPI.getLtvAnalysis({ period: "all" }),
       reportsAPI.getContractsMrr(),
       reportsAPI.getClientSpecialtyAnalysis({ period: "all" }),
       reportsAPI.getClientsByState(),
-      reportsAPI.getPurchaseHistoryByMonth(),
+      reportsAPI.getReservationsRevenueHistory(),
+      reportsAPI.getMrrHistory(),
     ]);
 
-    // Verificando o resultado de cada promessa individualmente
-    if (results[0].status === "fulfilled") {
-      setLtvData(results[0].value);
-    } else {
-      console.error("Falha ao buscar dados de LTV:", results[0].reason);
-      toast({
-        title: "Erro ao buscar LTV",
-        description: "Não foi possível carregar os dados de LTV.",
-        variant: "destructive",
-      });
-    }
-
-    if (results[1].status === "fulfilled") {
-      setMrrData(results[1].value);
-    } else {
-      console.error("Falha ao buscar dados de MRR:", results[1].reason);
-    }
-
-    if (results[2].status === "fulfilled") {
+    if (results[0].status === "fulfilled") setLtvData(results[0].value);
+    if (results[1].status === "fulfilled") setMrrData(results[1].value);
+    if (results[2].status === "fulfilled")
       setSpecialtyData(results[2].value || []);
-    } else {
-      console.error(
-        "Falha ao buscar dados de especialidade:",
-        results[2].reason
-      );
-    }
-
-    if (results[3].status === "fulfilled") {
+    if (results[3].status === "fulfilled")
       setClientsByState(results[3].value || []);
-    } else {
-      console.error("Falha ao buscar dados de localização:", results[3].reason);
-    }
 
-    if (results[4].status === "fulfilled") {
-      setPurchaseHistory(results[4].value || []);
-    } else {
-      console.error("Falha ao buscar histórico de compras:", results[4].reason);
-    }
+    // Combinar dados do histórico
+    const revenueHistory =
+      results[4].status === "fulfilled" ? results[4].value : [];
+    const mrrHistory =
+      results[5].status === "fulfilled" ? results[5].value : [];
 
-    await fetchPurchasesForMonth(selectedDate);
+    const historyMap = new Map<
+      string,
+      { month: string; mrr: number; revenue: number }
+    >();
+    revenueHistory.forEach((item) =>
+      historyMap.set(item.month, { ...item, mrr: 0 })
+    );
+    mrrHistory.forEach((item) => {
+      if (historyMap.has(item.month)) {
+        historyMap.get(item.month)!.mrr = item.mrr;
+      } else {
+        historyMap.set(item.month, { ...item, revenue: 0 });
+      }
+    });
+    setCombinedHistory(
+      Array.from(historyMap.values()).sort(
+        (a, b) =>
+          parseISO(
+            "20" + a.month.split("/")[1] + "-" + a.month.split("/")[0] + "-01"
+          ).getTime() -
+          parseISO(
+            "20" + b.month.split("/")[1] + "-" + b.month.split("/")[0] + "-01"
+          ).getTime()
+      )
+    );
+
+    await fetchPurchasesForMonth(new Date());
     setIsLoading(false);
-  }, [fetchPurchasesForMonth, selectedDate, toast]);
+  }, [fetchPurchasesForMonth]);
 
   useEffect(() => {
     loadDashboardData();
-  }, [loadDashboardData]);
-
-  // Efeito para rebuscar as vendas quando o mês do calendário muda
+  }, []);
   useEffect(() => {
-    const handler = setTimeout(() => {
-      fetchPurchasesForMonth(selectedDate);
-    }, 100);
-    return () => clearTimeout(handler);
+    fetchPurchasesForMonth(selectedDate);
   }, [
     selectedDate.getMonth(),
     selectedDate.getFullYear(),
     fetchPurchasesForMonth,
   ]);
-
-  // Efeito para filtrar as vendas a serem exibidas
   useEffect(() => {
-    if (viewMode === "month") {
-      setDisplayedSales(purchasesInMonth);
-    } else {
-      const dailySales = purchasesInMonth.filter((p) =>
-        isSameDay(parseISO(p.purchase_date), selectedDate)
+    if (viewMode === "month") setDisplayedSales(purchasesInMonth);
+    else
+      setDisplayedSales(
+        purchasesInMonth.filter((p) =>
+          isSameDay(parseISO(p.purchase_date), selectedDate)
+        )
       );
-      setDisplayedSales(dailySales);
-    }
   }, [viewMode, purchasesInMonth, selectedDate]);
 
-  if (isLoading) {
+  if (isLoading)
     return (
       <div className="flex h-full w-full items-center justify-center">
         <Loader2 className="h-12 w-12 animate-spin text-blue-600" />
       </div>
     );
-  }
 
   const totalDisplayedSales = displayedSales.reduce(
     (sum, sale) => sum + Number(sale.purchase_value),
@@ -211,7 +193,6 @@ export function ClientAnalyticsDashboard() {
           Atualizar Métricas
         </Button>
       </div>
-
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -268,14 +249,11 @@ export function ClientAnalyticsDashboard() {
           </CardContent>
         </Card>
       </div>
-
       <Tabs defaultValue="revenue-calendar" className="w-full">
         <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3">
-          <TabsTrigger value="revenue-calendar">
-            Receita de Reservas
-          </TabsTrigger>
-          <TabsTrigger value="specialty">Análise por Especialidade</TabsTrigger>
-          <TabsTrigger value="location">Análise por Localização</TabsTrigger>
+          <TabsTrigger value="revenue-calendar">Receita</TabsTrigger>
+          <TabsTrigger value="specialty">Especialidade</TabsTrigger>
+          <TabsTrigger value="location">Localização</TabsTrigger>
         </TabsList>
         <TabsContent value="revenue-calendar" className="mt-4 space-y-4">
           <div className="grid gap-6 lg:grid-cols-5">
@@ -368,7 +346,7 @@ export function ClientAnalyticsDashboard() {
                         ) : (
                           <TableRow>
                             <TableCell colSpan={2} className="text-center h-24">
-                              Nenhuma venda registrada para{" "}
+                              Nenhuma venda para{" "}
                               {viewMode === "day" ? "este dia" : "este mês"}.
                             </TableCell>
                           </TableRow>
@@ -383,35 +361,40 @@ export function ClientAnalyticsDashboard() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <BarChartIcon className="h-5 w-5" /> Histórico de Receita de
-                Reservas
+                <BarChartIcon className="h-5 w-5" /> Histórico de Receitas (MRR
+                vs Vendas)
               </CardTitle>
             </CardHeader>
             <CardContent className="pl-2">
               <ResponsiveContainer width="100%" height={300}>
-                <LineChart
-                  data={purchaseHistory}
-                  margin={{ top: 5, right: 20, left: 10, bottom: 5 }}
-                >
+                <LineChart data={combinedHistory}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="month" />
                   <YAxis
                     tickFormatter={(value) => `R$${(value / 1000).toFixed(0)}k`}
                   />
                   <Tooltip
-                    formatter={(value: number) => [
+                    formatter={(value: number, name: string) => [
                       `R$ ${value.toLocaleString("pt-BR", {
                         minimumFractionDigits: 2,
                       })}`,
-                      "Receita",
+                      name === "revenue" ? "Vendas Normais" : "MRR Contratos",
                     ]}
                   />
                   <Legend />
                   <Line
                     type="monotone"
                     dataKey="revenue"
-                    name="Receita"
+                    name="Vendas Normais"
                     stroke="#10b981"
+                    strokeWidth={2}
+                    activeDot={{ r: 8 }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="mrr"
+                    name="MRR Contratos"
+                    stroke="#8884d8"
                     strokeWidth={2}
                     activeDot={{ r: 8 }}
                   />
@@ -420,6 +403,7 @@ export function ClientAnalyticsDashboard() {
             </CardContent>
           </Card>
         </TabsContent>
+        {/* As outras abas (Specialty, Location) permanecem as mesmas */}
         <TabsContent value="specialty" className="space-y-4 mt-4">
           <Card>
             <CardHeader>
