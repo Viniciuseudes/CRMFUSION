@@ -233,44 +233,7 @@ router.get("/user-performance", requireRole(["admin", "gerente"]), async (req, r
 
 // ***** NOVAS ROTAS DE ANÁLISE DE CLIENTES (CORRIGIDAS) *****
 
-// Análise por Especialidade - CORRIGIDA
-router.get("/client-specialty-analysis", async (req, res, next) => {
-  try {
-    const { period = "all" } = req.query;
-    let query = `
-      SELECT 
-        specialty,
-        COUNT(id) as total_clients,
-        COALESCE(SUM(total_spent), 0) as total_revenue
-      FROM clients c WHERE 1=1
-    `;
-    const params = [];
-
-    if (period !== "all") {
-      query += ` AND c.created_at >= $${params.length + 1}`;
-      params.push(getStartDate(period));
-    }
-    
-    if (req.user.role === 'colaborador') {
-      query += ` AND c.assigned_to = $${params.length + 1}`;
-      params.push(req.user.id);
-    }
-
-    query += ' GROUP BY specialty ORDER BY total_revenue DESC';
-    const result = await pool.query(query, params);
-
-    res.json(result.rows.map(row => ({
-      specialty: row.specialty || 'Não especificada',
-      totalClients: parseInt(row.total_clients, 10),
-      totalRevenue: parseFloat(row.total_revenue),
-    })));
-  } catch (error) {
-    next(error);
-  }
-});
-
-
-// Análise de Lifetime Value (LTV) - CORRIGIDA
+// ROTA FINAL: LTV Analysis
 router.get("/ltv-analysis", async (req, res, next) => {
   try {
     let query = "SELECT id, total_spent, entry_date FROM clients c";
@@ -285,21 +248,13 @@ router.get("/ltv-analysis", async (req, res, next) => {
     const totalClients = clients.length;
 
     if (totalClients === 0) {
-      return res.json({
-        totalClients: 0,
-        totalLifetimeRevenue: 0,
-        averageLTV: 0,
-        avgClientLifespanDays: 0,
-      });
+      return res.json({ totalClients: 0, totalLifetimeRevenue: 0, averageLTV: 0, avgClientLifespanDays: 0 });
     }
 
     const totalLifetimeRevenue = clients.reduce((sum, client) => sum + parseFloat(client.total_spent || '0'), 0);
     const totalDaysAsClient = clients.reduce((sum, client) => {
       const entry = new Date(client.entry_date);
-      if (!isNaN(entry.getTime())) {
-        return sum + (new Date() - entry) / (1000 * 60 * 60 * 24);
-      }
-      return sum;
+      return sum + (new Date() - entry) / (1000 * 60 * 60 * 24);
     }, 0);
 
     const avgClientLifespanDays = totalClients > 0 ? totalDaysAsClient / totalClients : 0;
@@ -317,7 +272,7 @@ router.get("/ltv-analysis", async (req, res, next) => {
   }
 });
 
-// MRR de Contratos - CORRIGIDA
+// ROTA FINAL: MRR de Contratos
 router.get("/mrr-contracts", async (req, res, next) => {
   try {
     let query = `
@@ -337,39 +292,45 @@ router.get("/mrr-contracts", async (req, res, next) => {
   }
 });
 
+// ROTA FINAL: Análise por Especialidade
+router.get("/client-specialty-analysis", async (req, res, next) => {
+  try {
+    let query = "SELECT specialty, COUNT(id) as total_clients, COALESCE(SUM(total_spent), 0) as total_revenue FROM clients c";
+    const params = [];
+    if (req.user.role === 'colaborador') {
+      query += ` WHERE c.assigned_to = $1`;
+      params.push(req.user.id);
+    }
+    query += " GROUP BY specialty ORDER BY total_revenue DESC";
+    const result = await pool.query(query, params);
+    res.json(result.rows.map(row => ({
+      specialty: row.specialty || 'Não especificada',
+      totalClients: parseInt(row.total_clients, 10),
+      totalRevenue: parseFloat(row.total_revenue),
+    })));
+  } catch (error) {
+    next(error);
+  }
+});
 
-// Vendas mensais detalhadas - CORRIGIDA E SEGURA
+// ROTA FINAL: Vendas mensais detalhadas
 router.get("/monthly-sales", async (req, res, next) => {
   try {
     const { month } = req.query;
-    if (!month || !/^\d{4}-\d{2}$/.test(month)) {
-      return res.status(400).json({ error: "Formato de mês inválido. Use YYYY-MM." });
-    }
+    if (!month || !/^\d{4}-\d{2}$/.test(month)) return res.status(400).json({ error: "Formato de mês inválido. Use YYYY-MM." });
     const startDate = `${month}-01`;
     const endDate = new Date(new Date(startDate).setMonth(new Date(startDate).getMonth() + 1)).toISOString().split('T')[0];
-    
     let query = `
-      SELECT
-        a.client_id,
-        c.name as client_name,
-        a.date as purchase_date, -- Devolve a data exata da compra
-        COALESCE(
-          substring(a.description from 'R\\$ ([0-9.,]+)')::NUMERIC,
-          0
-        ) as purchase_value -- Devolve o valor individual
-      FROM activities a
-      JOIN clients c ON a.client_id = c.id
-      WHERE a.type = 'note'
-        AND a.description LIKE 'Nova compra registrada no valor de R$%'
-        AND a.date >= $1 AND a.date < $2
+      SELECT a.client_id, c.name as client_name, a.date as purchase_date,
+             COALESCE(substring(a.description from 'R\\$ *([0-9.,]+)')::NUMERIC, 0) as purchase_value
+      FROM activities a JOIN clients c ON a.client_id = c.id
+      WHERE a.type = 'note' AND a.description LIKE 'Nova compra registrada%' AND a.date >= $1 AND a.date < $2
     `;
     const params = [startDate, endDate];
-    
     if (req.user.role === 'colaborador') {
       query += ` AND a.user_id = $3`;
       params.push(req.user.id);
     }
-    
     query += ` ORDER BY a.date DESC;`;
     const result = await pool.query(query, params);
     res.json(result.rows);
@@ -378,59 +339,42 @@ router.get("/monthly-sales", async (req, res, next) => {
   }
 });
 
-// Clientes por Estado - CORRIGIDA
-router.get("/clients-by-state", async (req, res, next) => {
-  try {
-    let query = `
-      SELECT state, COUNT(id) as count
-      FROM clients 
-      WHERE state IS NOT NULL AND state <> ''
-    `;
-    const params = [];
-    
-    if (req.user.role === 'colaborador') {
-      query += ` AND assigned_to = $1`;
-      params.push(req.user.id);
-    }
-    query += ` GROUP BY state ORDER BY count DESC`;
-    const result = await pool.query(query, params);
-    res.json(result.rows.map(row => ({
-      state: row.state,
-      clients: parseInt(row.count, 10)
-    })));
-  } catch (error) {
-    next(error);
-  }
-});
-
-// Histórico de compras para o gráfico de linha
+// ROTA FINAL: Histórico de compras para o gráfico
 router.get("/purchase-history-by-month", async (req, res, next) => {
   try {
     let query = `
-      SELECT
-        TO_CHAR(date_trunc('month', date), 'YYYY-MM') as month,
-        SUM(
-          COALESCE(
-            substring(description from 'R\\$ ([0-9.,]+)')::NUMERIC,
-            0
-          )
-        ) as revenue
-      FROM activities
-      WHERE type = 'note' AND description LIKE 'Nova compra registrada no valor de R$%'
+      SELECT TO_CHAR(date_trunc('month', date), 'YYYY-MM') as month,
+             SUM(COALESCE(substring(description from 'R\\$ *([0-9.,]+)')::NUMERIC, 0)) as revenue
+      FROM activities WHERE type = 'note' AND description LIKE 'Nova compra registrada%'
     `;
     const params = [];
-
     if (req.user.role === 'colaborador') {
-        query += ` AND user_id = $1`;
-        params.push(req.user.id);
+      query += ` AND user_id = $1`;
+      params.push(req.user.id);
     }
-
     query += ` GROUP BY month ORDER BY month ASC;`;
     const result = await pool.query(query, params);
     res.json(result.rows.map(row => ({
       month: format(parseISO(row.month + '-01'), "MMM/yy", { locale: ptBR }),
       revenue: parseFloat(row.revenue)
     })));
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ROTA FINAL: Clientes por Estado
+router.get("/clients-by-state", async (req, res, next) => {
+  try {
+    let query = "SELECT state, COUNT(id) as count FROM clients WHERE state IS NOT NULL AND state <> ''";
+    const params = [];
+    if (req.user.role === 'colaborador') {
+      query += ` AND assigned_to = $1`;
+      params.push(req.user.id);
+    }
+    query += ` GROUP BY state ORDER BY count DESC`;
+    const result = await pool.query(query, params);
+    res.json(result.rows.map(row => ({ state: row.state, clients: parseInt(row.count, 10) })));
   } catch (error) {
     next(error);
   }
