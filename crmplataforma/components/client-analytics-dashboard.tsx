@@ -44,9 +44,7 @@ import {
 import { format, isSameDay, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import "react-day-picker/dist/style.css";
-import { useToast } from "@/hooks/use-toast";
 
-// CORREÇÃO FINAL: A constante COLORS foi movida para dentro do escopo do componente.
 const COLORS = [
   "#3b82f6",
   "#10b981",
@@ -63,10 +61,23 @@ type Purchase = {
   purchase_value: number;
 };
 
+const monthNameToNumber: { [key: string]: number } = {
+  jan: 0,
+  fev: 1,
+  mar: 2,
+  abr: 3,
+  mai: 4,
+  jun: 5,
+  jul: 6,
+  ago: 7,
+  set: 8,
+  out: 9,
+  nov: 10,
+  dez: 11,
+};
+
 export function ClientAnalyticsDashboard() {
   const [isLoading, setIsLoading] = useState(true);
-  const { toast } = useToast();
-
   const [ltvData, setLtvData] = useState<any>(null);
   const [mrrData, setMrrData] = useState<any>(null);
   const [specialtyData, setSpecialtyData] = useState<any[]>([]);
@@ -76,7 +87,6 @@ export function ClientAnalyticsDashboard() {
   >([]);
   const [purchasesInMonth, setPurchasesInMonth] = useState<Purchase[]>([]);
   const [displayedSales, setDisplayedSales] = useState<Purchase[]>([]);
-
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [viewMode, setViewMode] = useState<"day" | "month">("day");
   const [isSalesLoading, setIsSalesLoading] = useState(false);
@@ -88,7 +98,6 @@ export function ClientAnalyticsDashboard() {
       const sales = await reportsAPI.getMonthlySales(monthString);
       setPurchasesInMonth(sales || []);
     } catch (error) {
-      console.error("Erro ao carregar vendas do mês:", error);
       setPurchasesInMonth([]);
     } finally {
       setIsSalesLoading(false);
@@ -117,6 +126,7 @@ export function ClientAnalyticsDashboard() {
       results[4].status === "fulfilled" ? results[4].value : [];
     const mrrHistory =
       results[5].status === "fulfilled" ? results[5].value : [];
+
     const historyMap = new Map<
       string,
       { month: string; mrr: number; revenue: number }
@@ -134,15 +144,16 @@ export function ClientAnalyticsDashboard() {
       historyMap.set(item.month, entry);
     });
 
-    // CORREÇÃO: Ordenação do histórico para garantir a ordem correta no gráfico
     const sortedHistory = Array.from(historyMap.values()).sort((a, b) => {
+      const [monthAStr, yearA] = a.month.split("/");
+      const [monthBStr, yearB] = b.month.split("/");
       const dateA = new Date(
-        20 + a.month.split("/")[1],
-        Number(a.month.split("/")[0]) - 1
+        parseInt("20" + yearA),
+        monthNameToNumber[monthAStr.toLowerCase()]
       );
       const dateB = new Date(
-        20 + b.month.split("/")[1],
-        Number(b.month.split("/")[0]) - 1
+        parseInt("20" + yearB),
+        monthNameToNumber[monthBStr.toLowerCase()]
       );
       return dateA.getTime() - dateB.getTime();
     });
