@@ -351,7 +351,7 @@ router.get("/reservations-revenue-history", async (req, res, next) => {
             REPLACE(
               REPLACE(substring(description from 'R\\$\\s*([0-9.,]+)'), '.', ''), 
               ',', '.'
-            )::NUMERIC, 
+            )::NUMERIC / 100.0), 
             0
           )
         ) as revenue 
