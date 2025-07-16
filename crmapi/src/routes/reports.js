@@ -349,7 +349,7 @@ router.get("/reservations-revenue-history", async (req, res, next) => {
         SUM(
           COALESCE(
             REPLACE(
-              REPLACE(substring(description from 'R\\$\\s*([0-9.,]+)'), '.', ''),
+              REPLACE(substring(description from 'R\\$\\s*([0-9.,]+)'), '.', ''), 
               ',', '.'
             )::NUMERIC, 
             0
