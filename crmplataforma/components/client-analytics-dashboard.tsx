@@ -396,7 +396,9 @@ export function ClientAnalyticsDashboard() {
                       `R$ ${value.toLocaleString("pt-BR", {
                         minimumFractionDigits: 2,
                       })}`,
-                      name === "revenue" ? "Vendas de Horas" : "MRR Contratos",
+                      name === "Vendas de Horas"
+                        ? "Vendas de Horas"
+                        : "MRR Contratos",
                     ]}
                   />
                   <Legend />
