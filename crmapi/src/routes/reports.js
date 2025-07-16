@@ -343,15 +343,14 @@ router.get("/monthly-sales", async (req, res, next) => {
 // ROTA FINAL: Histórico de compras para o gráfico
 router.get("/reservations-revenue-history", async (req, res, next) => {
   try {
-    // CORREÇÃO: A expressão regular agora trata corretamente os números com vírgula.
     const query = `
       SELECT 
         TO_CHAR(date_trunc('month', date), 'YYYY-MM') as month, 
         SUM(
           COALESCE(
-            REPLACE(substring(description from 'R\\$\\s*([0-9.,]+)'), '.', ''),
-            ',', '.'
-
+            REPLACE(
+              REPLACE(substring(description from 'R\\$\\s*([0-9.,]+)'), '.', ''),
+              ',', '.'
             )::NUMERIC, 
             0
           )
@@ -370,7 +369,6 @@ router.get("/reservations-revenue-history", async (req, res, next) => {
     next(error);
   }
 });
-
 
 router.get("/mrr-history", async (req, res, next) => {
   try {
