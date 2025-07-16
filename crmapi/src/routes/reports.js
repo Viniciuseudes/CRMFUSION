@@ -349,9 +349,9 @@ router.get("/reservations-revenue-history", async (req, res, next) => {
         TO_CHAR(date_trunc('month', date), 'YYYY-MM') as month, 
         SUM(
           COALESCE(
-            REPLACE(
-              regexp_replace(substring(description from 'R\\$\\s*([0-9.,]+)'), '\\.', '', 'g'), 
-              ',', '.'
+            REPLACE(substring(description from 'R\\$\\s*([0-9.,]+)'), '.', ''),
+            ',', '.'
+
             )::NUMERIC, 
             0
           )
